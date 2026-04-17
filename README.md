@@ -58,27 +58,20 @@ First, navigate to the advection directory within the `examples` folder:
 ``` 
 cd jaxpi/examples/advection
 ``` 
-To train the model, run the following command:
+To train the model, we need to specify the configuration file that contains the training settings and hyperparameters.
 ```
-python3 main.py 
+python3 main.py  --config=configs/baseline.py
 ```
-
-To customize your experiment configuration, you may want to specify a different config file as follows:
-
-```
-python3 main.py --config=configs/sota.py 
-```
-
 
 Our code automatically supports multi-GPU execution. 
 You can specify the GPUs you want to use with the `CUDA_VISIBLE_DEVICES` environment variable. For example, to use the first two GPUs (0 and 1), use the following command:
 
 ```
-CUDA_VISIBLE_DEVICES=0,1 python3 main.py
+CUDA_VISIBLE_DEVICES=0,1 python3 main.py --config=configs/baseline.py
 ```
 
 **Note on Memory Usage**: Different models and examples may require varying amounts of GPU memory. 
-If you encounter an out-of-memory error, you can decrease the batch size using the `--config.batch_size` option.
+If you encounter an out-of-memory error, you can decrease the batch size using the `--config.training.batch_size` option.
 
 To evaluate the model's performance, you can switch to evaluation mode with the following command:
 
@@ -103,7 +96,6 @@ To evaluate the model's performance, you can switch to evaluation mode with the 
       year={2024}
     }
 
-    
     @inproceedings{
         wang2025gradient,
         title={Gradient Alignment in Physics-informed Neural Networks: A Second-Order Optimization Perspective},

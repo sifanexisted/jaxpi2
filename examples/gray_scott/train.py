@@ -122,10 +122,10 @@ def train_and_evaluate(config, workdir):
     state = create_train_state(config, tx, arch)
 
     # Initialize model
-    model = models.GreyScott(config, lr, tx, arch, state, t_max=t1, b1=b1, b2=b2, c1=c1, c2=c2, eps1=eps1, eps2=eps2)
+    model = models.GrayScott(config, lr, tx, arch, state, t_max=t1, b1=b1, b2=b2, c1=c1, c2=c2, eps1=eps1, eps2=eps2)
 
     # Initialize evaluator
-    evaluator = models.GreyScottEvaluator(config)
+    evaluator = models.GrayScottEvaluator(config)
 
     # Initialize logger
     logger = Logger()

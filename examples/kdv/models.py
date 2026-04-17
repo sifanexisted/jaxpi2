@@ -31,7 +31,7 @@ class KDV(ForwardIVP):
         u_t = grad(self.neural_net, argnums=1)(params, t, x)
         u_fn = lambda x: self.neural_net(params, t, x)
         _, (u_x, u_xx, u_xxx) = jet(u_fn, (x,), [[1.0, 0.0, 0.0]])
-        return u_t + u * u_x + 0.022 ** 2 * u_xxx
+        return u_t + u * u_x + 0.022 ** 2 * u_xxx   # Hardcoded
 
     @partial(jit, static_argnums=(0,))
     def losses(self, params, state, batch):

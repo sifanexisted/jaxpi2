@@ -10,5 +10,6 @@ def get_config():
     config.pseudo_time.strategy = "dynamic"
     config.pseudo_time.update_schedule.every = 5000
 
+    config.logging.log_pts_weights = True
 
     return config

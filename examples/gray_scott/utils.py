@@ -13,11 +13,10 @@ def get_dataset(time_range=[0, 1]):
 
     start_time_step = int(time_range[0] * len(t_star))
     end_time_step = int(time_range[1] * len(t_star))
-    num_time_steps = end_time_step - start_time_step
 
     u_ref = u_ref[start_time_step:end_time_step, :, :]
     v_ref = v_ref[start_time_step:end_time_step, :, :]
-    t_star = t_star[:num_time_steps] - t_star[start_time_step]
+    t_star = t_star[start_time_step: end_time_step] - t_star[start_time_step]
 
     b1 = data["b1"].flatten()[0]
     b2 = data["b2"].flatten()[0]

@@ -11,9 +11,8 @@ def get_dataset(time_range=[0.0, 1.0]):
     # Only use a fraction of the data
     start_time_step = int(time_range[0] * len(t_star))
     end_time_step = int(time_range[1] * len(t_star))
-    num_time_steps = end_time_step - start_time_step
 
     u_ref = u_ref[start_time_step:end_time_step]
-    t_star = t_star[:num_time_steps] - t_star[start_time_step]
+    t_star = t_star[start_time_step: end_time_step] - t_star[start_time_step]
 
     return u_ref, t_star, x_star

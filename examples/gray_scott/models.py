@@ -8,7 +8,7 @@ from jaxpi.models import ForwardIVP
 from jaxpi.evaluator import BaseEvaluator
 
 
-class GreyScott(ForwardIVP):
+class GrayScott(ForwardIVP):
     def __init__(self, config, lr, tx, arch, state, t_max, b1, b2, c1, c2, eps1, eps2):
         super().__init__(config, lr, tx, arch, state)
 
@@ -97,7 +97,7 @@ class GreyScott(ForwardIVP):
         return u_error, v_error
 
 
-class GreyScottEvaluator(BaseEvaluator):
+class GrayScottEvaluator(BaseEvaluator):
     def __init__(self, config):
         super().__init__(config)
 
