@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jaxpi_dev"
+version = "2.0.0"
+description = ""
+readme = "README.md"
+authors = [
+    { name = "Sifan Wang", email = "sifan.wang@yale.edu" }
+]
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]

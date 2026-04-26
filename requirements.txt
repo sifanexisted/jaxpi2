@@ -1,0 +1,15 @@
+absl_py
+einops
+h5py
+flax
+jax
+matplotlib
+ml_collections
+numpy
+scipy
+optax
+orbax-checkpoint
+tensorflow_cpu
+torch
+wandb
+
