@@ -3,6 +3,7 @@
 This repository is a comprehensive implementation of physics-informed neural networks (PINNs), 
 seamlessly integrating several advanced network architectures, training algorithms from these papers 
 
+- [When PINNs Go Wrong: Pseudo-Time Stepping Against Spurious Solutions](https://arxiv.org/abs/2604.23528v1)
 - [Gradient Alignment in Physics-informed Neural Networks: A Second-Order Optimization Perspective](https://arxiv.org/abs/2502.00604)
 - [Understanding and Mitigating Gradient Flow Pathologies in Physics-Informed Neural Networks](https://epubs.siam.org/doi/10.1137/20M1318043)
 - [When and Why PINNs Fail to Train: A Neural Tangent Kernel Perspective](https://www.sciencedirect.com/science/article/pii/S002199912100663X?casa_token=YlzVQK6hGy8AAAAA:bKwMNg70UoeEuisR1cd1KZnR20xspdvYp1dM4jLkl_wfVDX7O1j2IOlGZsYnC4esu7YcMaO_WOIC)
@@ -13,8 +14,6 @@ seamlessly integrating several advanced network architectures, training algorith
 - [Fourier Features Let Networks Learn High Frequency Functions in Low Dimensional Domains](https://arxiv.org/abs/2006.10739)
 - [A Method for Representing Periodic Functions and Enforcing Exactly Periodic Boundary Conditions with Deep Neural Networks](https://www.sciencedirect.com/science/article/abs/pii/S0021999121001376)
 - [Characterizing Possible Failure Modes in Physics-Informed Neural Networks](https://arxiv.org/abs/2109.01050)
-- [Deep Learning Alternatives of the Kolmogorov Superposition Theorem](https://arxiv.org/abs/2410.01990)
-
 
 This  repository also releases an extensive range of benchmarking examples, showcasing the effectiveness and robustness of our implementation.
 Our implementation supports both **single** and **multi-GPU** training, while evaluation is currently limited to
@@ -104,6 +103,15 @@ To evaluate the model's performance, you can switch to evaluation mode with the 
         year={2025},
         url={https://openreview.net/forum?id=iweeVl1RHU}
     }
+  
+    @article{wang2026pinns,
+      title={When PINNs Go Wrong: Pseudo-Time Stepping Against Spurious Solutions},
+      author={Wang, Sifan and Koohy, Shawn and Lu, Yiping and Perdikaris, Paris},
+      journal={arXiv preprint arXiv:2604.23528},
+      year={2026}
+    }
+
+    
 
     
 
