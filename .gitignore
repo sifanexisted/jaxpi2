@@ -9,3 +9,5 @@ smoke_test/
 node_modules/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
+examples/kolmogorov_flow_Re1e6/data/*.npy
+ckpt/

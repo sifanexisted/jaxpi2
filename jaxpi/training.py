@@ -42,9 +42,18 @@ def sample_batches(samplers):
 
 
 def _ensure_wandb(config):
-    """Initialize W&B once, on the first host only."""
+    """Initialize W&B once, on the first host only.
+
+    The entity defaults to the logged-in account; set `config.wandb.entity`
+    (e.g. your personal username) to log somewhere other than your default
+    team, or run with WANDB_MODE=offline to keep runs local.
+    """
     if jax.process_index() == 0 and wandb.run is None:
-        wandb.init(project=config.wandb.project, name=config.wandb.name)
+        wandb.init(
+            project=config.wandb.project,
+            name=config.wandb.name,
+            entity=config.wandb.get("entity", None),
+        )
 
 
 def train_loop(

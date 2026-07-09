@@ -456,40 +456,15 @@ class ForwardIVP(PINN):
         self.num_chunks = config.causal.num_chunks
         self.triu = jnp.triu(jnp.ones((self.num_chunks, self.num_chunks)), k=1)
 
-    @partial(jit, static_argnums=(0,))
-    def compute_causal_weights(self, state, batch):
-        coords = tuple(batch[:, i] for i in range(batch.shape[1]))
+        # Sharded like the training step, so evaluators can compute the exact
+        # causal gates on the full (multi-GPU) batch without OOM-ing a device.
+        self.compute_causal_weights = self.create_compute_causal_weights_fn()
 
-        # Stack residuals: shape (n_components, N)
-        keys, res = self._stack_residuals(self.r_pred_fn(state.params, *coords), state)
+    def _global_chunk_losses(self, res_pred):
+        """Global per-chunk residual losses in time order: (n_components, num_chunks).
 
-        if self.config.pseudo_time.enabled:
-            sols_pred = jnp.stack(self.sol_pred_fn(state.params, *coords))
-            sols_prev = jnp.stack(self.sol_pred_fn(state.prev_params, *coords))
-
-            pts_weights = self._pts_weight_vector(keys, state)  # (n_components,)
-            res = res + pts_weights[:, None] * (sols_pred - sols_prev)
-
-        # Chunk, loss, and causal weights — all vectorised over components
-        res = res.reshape(res.shape[0], self.num_chunks, -1)  # (n_components, chunks, N)
-        losses = jnp.mean(res ** 2, axis=2)  # (n_components, chunks)
-        gammas = lax.stop_gradient(
-            jnp.exp(-self.tol * (losses @ self.triu))
-        )  # (n_components, chunks)
-
-        return gammas.min(axis=0)
-
-    def _causal_losses(self, res_pred):
-        """Causally weighted per-component losses for time-sorted residuals.
-
-        `res_pred` has shape (n_components, N) with points sorted by time. The
-        *global* batch is split into `causal.num_chunks` chunks and each chunk
-        is gated by the cumulative loss of all *earlier* chunks. Under
-        shard_map the batch is time-sorted globally and split contiguously
-        across devices, so per-device chunk losses concatenated in device order
-        recover the global time ordering. Each device returns its local share
-        of the global loss, so that pmean over devices yields the global
-        causal loss (and its exact gradient) for any device count.
+        `res_pred` is this device's (n_components, N_local) slice of the
+        globally time-sorted residuals (or the full batch outside shard_map).
         """
         num_devices = self.mesh.shape["batch"] if _axis_is_bound("batch") else 1
 
@@ -509,17 +484,78 @@ class ForwardIVP(PINN):
         chunk_loss = jnp.mean(res_pred**2, axis=2)
 
         if num_devices > 1:
-            # (n_components, num_chunks) in global time order
-            chunk_loss_global = lax.all_gather(chunk_loss, "batch", axis=1, tiled=True)
+            # concatenated in device order == global time order
+            chunk_loss = lax.all_gather(chunk_loss, "batch", axis=1, tiled=True)
+        return chunk_loss
+
+    def _causal_residuals(self, params, state, batch, pseudo_time):
+        """Residuals (with optional pseudo-time shift) for causal chunking."""
+        coords = tuple(batch[:, i] for i in range(batch.shape[1]))
+        keys, res = self._stack_residuals(self.r_pred_fn(params, *coords), state)
+
+        if pseudo_time:
+            sols_pred = jnp.stack(self.sol_pred_fn(params, *coords))
+            sols_prev = jnp.stack(self.sol_pred_fn(state.prev_params, *coords))
+            pts_weights = self._pts_weight_vector(keys, state)  # (n_components,)
+            res = res + pts_weights[:, None] * (sols_pred - sols_prev)
+        return res
+
+    def create_compute_causal_weights_fn(self):
+        @partial(
+            jax.shard_map,
+            mesh=self.mesh,
+            in_specs=(P(), P("batch")),
+            out_specs=P(),
+            check_vma=False,
+        )
+        def sharded_weights(state, batch):
+            res = self._causal_residuals(
+                state.params, state, batch, self.config.pseudo_time.enabled
+            )
+            chunk_loss = self._global_chunk_losses(res)  # (n_components, num_chunks)
+            gammas = lax.stop_gradient(
+                jnp.exp(-self.tol * (chunk_loss @ self.triu))
+            )
+            return gammas.min(axis=0)
+
+        @jax.jit
+        def compute_causal_weights(state, batch):
+            return sharded_weights(self._replicate(state), self._shard_batch(batch))
+
+        return compute_causal_weights
+
+    def _causal_losses(self, res_pred):
+        """Causally weighted per-component losses for time-sorted residuals.
+
+        `res_pred` has shape (n_components, N) with points sorted by time. The
+        *global* batch is split into `causal.num_chunks` chunks and each chunk
+        is gated by the cumulative loss of all *earlier* chunks. Under
+        shard_map the batch is time-sorted globally and split contiguously
+        across devices, so per-device chunk losses concatenated in device order
+        recover the global time ordering. Each device returns its local share
+        of the global loss, so that pmean over devices yields the global
+        causal loss (and its exact gradient) for any device count.
+        """
+        num_devices = self.mesh.shape["batch"] if _axis_is_bound("batch") else 1
+        local_chunks = self.num_chunks // num_devices
+
+        chunk_loss_global = self._global_chunk_losses(res_pred)
+
+        if num_devices > 1:
             gammas = lax.stop_gradient(
                 jnp.exp(-self.tol * (chunk_loss_global @ self.triu))
             )  # (n_components, num_chunks)
             # This device's slice of the global causal weights
             start = lax.axis_index("batch") * local_chunks
             gammas = lax.dynamic_slice_in_dim(gammas, start, local_chunks, axis=1)
+            # this device's local chunk losses (own slice of the gathered array)
+            chunk_loss = lax.dynamic_slice_in_dim(
+                chunk_loss_global, start, local_chunks, axis=1
+            )
         else:
+            chunk_loss = chunk_loss_global
             gammas = lax.stop_gradient(
-                jnp.exp(-self.tol * (chunk_loss @ self.triu))
+                jnp.exp(-self.tol * (chunk_loss_global @ self.triu))
             )  # (n_components, num_chunks)
 
         return jnp.mean(chunk_loss * gammas, axis=1)

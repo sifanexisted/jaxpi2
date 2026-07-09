@@ -82,6 +82,21 @@ def train_and_evaluate(config):
         )
         return {"ics": iter(ics_sampler), "res": iter(res_sampler)}
 
+    def make_eval_args(window_idx):
+        # DNS snapshots that fall inside this window (in window-relative time),
+        # on a subsampled grid; empty when the window contains no snapshot.
+        # Physical time of window w starts at the IC snapshot's time.
+        t_lo = float(t_star[config.init_time_step]) + window_idx * dT
+        mask = (t_star >= t_lo - 1e-6) & (t_star <= t_lo + dT + 1e-6)
+        sub = slice(None, None, 16)
+        return (
+            jnp.asarray(t_star[mask] - t_lo),
+            coords[sub],
+            jnp.asarray(u_ref[mask][:, sub]),
+            jnp.asarray(v_ref[mask][:, sub]),
+            jnp.asarray(w_ref[mask][:, sub]),
+        )
+
     def propagate_ic(model, window_idx):
         # Predicted solution at t = dT becomes the next window's IC
         u0, v0, w0 = predict_initial_condition(config, model, dT, coords)
@@ -93,7 +108,10 @@ def train_and_evaluate(config):
             )
         )
 
-    train_time_windows(config, model, make_samplers, evaluator=evaluator, propagate_ic=propagate_ic)
+    train_time_windows(
+        config, model, make_samplers, evaluator=evaluator,
+        propagate_ic=propagate_ic, make_eval_args=make_eval_args,
+    )
 
 
 def main(argv):
