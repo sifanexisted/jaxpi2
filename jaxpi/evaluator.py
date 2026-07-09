@@ -1,10 +1,3 @@
-import jax.numpy as jnp
-
-from jax import jacrev
-
-from jaxpi.utils import flatten_pytree
-
-
 class BaseEvaluator:
     def __init__(self, config):
         self.config = config
@@ -19,9 +12,10 @@ class BaseEvaluator:
             self.log_dict[key + "_loss"] = values
 
     def log_raw_losses(self, model, params, state, batch):
-        # Unweighted residual losses (no pseudo-time shift, no causal weights)
+        # Unweighted residual losses (no pseudo-time shift, no causal
+        # weights), sharded across devices like the training step
         res_batch = batch["res"] if isinstance(batch, dict) else batch
-        loss_dict = model.compute_residual_losses(params, state, res_batch)
+        loss_dict = model.compute_raw_residual_losses(params, state, res_batch)
         for key, values in loss_dict.items():
             self.log_dict[key + "_raw_loss"] = values
 
@@ -35,11 +29,10 @@ class BaseEvaluator:
         for key, values in weights.items():
             self.log_dict[key + "_pts_weight"] = values
 
-    def log_grads(self, model, params, batch):
-        grads = jacrev(model.losses)(params, model.state, batch)
-        for key, value in grads.items():
-            flattened_grad = flatten_pytree(value)
-            grad_norm = jnp.linalg.norm(flattened_grad)
+    def log_grads(self, model, state, batch):
+        # Per-term gradient norms, sharded across devices
+        grad_norms = model.compute_grad_norms(state, batch)
+        for key, grad_norm in grad_norms.items():
             self.log_dict[key + "_grad_norm"] = grad_norm
 
     def __call__(self, model, state, loss_dict, batch, *args):
@@ -64,6 +57,6 @@ class BaseEvaluator:
             self.log_pts_weights(state)
 
         if self.config.logging.log_grads:
-            self.log_grads(model, params, batch)
+            self.log_grads(model, state, batch)
 
         return self.log_dict

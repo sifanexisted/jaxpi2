@@ -208,6 +208,10 @@ class PINN:
         self.update_loss_weights = self.create_update_loss_weights_fn()
         self.update_pts_weights = self.create_update_pts_weights_fn()
 
+        # Sharded evaluation helpers (safe for full multi-GPU batches)
+        self.compute_raw_residual_losses = self.create_compute_raw_residual_losses_fn()
+        self.compute_grad_norms = self.create_compute_grad_norms_fn()
+
         self.sol_pred_fn = vmap(self.neural_net, (None,) + (0,) * self.config.input_dim)
         self.r_pred_fn = vmap(self.r_net, (None,) + (0,) * self.config.input_dim)
 
@@ -328,22 +332,25 @@ class PINN:
 
         return dict(zip(keys, weights))
 
-    def compute_loss_weights(self, state, batch):
-        """
-        Balance losses based on the gradient norms of each loss.
-        """
-        # Compute the gradient of each loss w.r.t. the parameters
+    def _grad_norms(self, state, batch):
+        """Per-loss-term gradient norms on the (possibly sharded) batch."""
         grads = jacrev(self.losses)(state.params, state, batch)
 
         # Average gradients over the sharded batch so all devices agree
         if _axis_is_bound("batch"):
             grads = lax.pmean(grads, "batch")
 
-        # Compute the grad norm of each loss
         grad_norm_dict = {}
         for key, value in grads.items():
             flattened_grad = flatten_pytree(value)
             grad_norm_dict[key] = jnp.linalg.norm(flattened_grad)
+        return grad_norm_dict
+
+    def compute_loss_weights(self, state, batch):
+        """
+        Balance losses based on the gradient norms of each loss.
+        """
+        grad_norm_dict = self._grad_norms(state, batch)
 
         # Compute the mean of grad norms over all losses
         mean_grad_norm = jnp.mean(jnp.stack(tree_leaves(grad_norm_dict)))
@@ -426,6 +433,46 @@ class PINN:
             return sharded_update(self._replicate(state), self._shard_batch(batch))
 
         return update_loss_weights
+
+    def create_compute_raw_residual_losses_fn(self):
+        """Sharded unweighted residual losses (no pseudo-time, no causal) —
+        used by evaluators, so that full multi-GPU batches fit in memory."""
+        @partial(
+            jax.shard_map,
+            mesh=self.mesh,
+            in_specs=(P(), P(), P("batch")),
+            out_specs=P(),
+            check_vma=False,
+        )
+        def sharded_losses(params, state, batch):
+            losses = self.compute_residual_losses(params, state, batch)
+            return lax.pmean(losses, "batch")
+
+        @jax.jit
+        def compute_raw_residual_losses(params, state, batch):
+            return sharded_losses(
+                self._replicate(params), self._replicate(state), self._shard_batch(batch)
+            )
+
+        return compute_raw_residual_losses
+
+    def create_compute_grad_norms_fn(self):
+        """Sharded per-term gradient norms — used by evaluators."""
+        @partial(
+            jax.shard_map,
+            mesh=self.mesh,
+            in_specs=(P(), P("batch")),
+            out_specs=P(),
+            check_vma=False,
+        )
+        def sharded_norms(state, batch):
+            return self._grad_norms(state, batch)
+
+        @jax.jit
+        def compute_grad_norms(state, batch):
+            return sharded_norms(self._replicate(state), self._shard_batch(batch))
+
+        return compute_grad_norms
 
     def create_update_pts_weights_fn(self):
         @partial(
