@@ -1,4 +1,4 @@
-# Theory
+# Reference
 
 JAXPI integrates training strategies from a line of work on why physics-informed neural
 networks fail and how to fix them. Short summaries and pointers below; the

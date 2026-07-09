@@ -1,7 +1,7 @@
 # About
 
 JAXPI is developed by [Sifan Wang](https://github.com/sifanexisted) and collaborators. The
-library distills the training recipes from the papers listed in [Theory](/theory) into a lean,
+library distills the training recipes from the papers listed in [Reference](/reference) into a lean,
 tested JAX codebase.
 
 ## Citation

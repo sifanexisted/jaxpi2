@@ -24,7 +24,7 @@ const guideSidebar = [
       { text: "Pseudo-Time Stepping", link: "/methods/pseudo-time" },
     ],
   },
-  { text: "Theory", link: "/theory" },
+  { text: "Reference", link: "/reference" },
   { text: "About", link: "/about" },
 ];
 
@@ -85,14 +85,14 @@ export default defineConfig({
       },
       { text: "Examples", link: "/examples/" },
       { text: "API", link: "/api/models" },
-      { text: "Theory", link: "/theory" },
+      { text: "Reference", link: "/reference" },
     ],
 
     sidebar: {
       "/guide/": guideSidebar,
       "/getting-started": guideSidebar,
       "/methods/": guideSidebar,
-      "/theory": guideSidebar,
+      "/reference": guideSidebar,
       "/about": guideSidebar,
       "/examples/": [
         { text: "Gallery", link: "/examples/" },
