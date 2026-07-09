@@ -22,7 +22,7 @@ gradients orders of magnitude larger (or smaller) than the data-fit terms. With 
 weights, gradient descent effectively optimizes only the dominant term — the classic
 "gradient pathology" of PINNs.
 
-![Gradient norms before and after balancing](/jaxpi2/methods/loss_balancing.png)
+![Gradient norms before and after balancing](/jaxpi2/methods/loss_balancing.svg)
 
 ## The fix: equalize gradient norms
 

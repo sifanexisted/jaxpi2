@@ -20,7 +20,7 @@ $n$ gradients (score 1 = perfectly aligned, 0 = orthogonal, −1 = opposed), mea
 across loss terms within a step and between consecutive steps. First-order optimizers
 oscillate near or below zero early in training; quasi-second-order ones stay positive.
 
-![Zigzag vs preconditioned trajectories](/jaxpi2/methods/soap_alignment.png)
+![Zigzag vs preconditioned trajectories](/jaxpi2/methods/soap_alignment.svg)
 
 ## The fix: precondition with SOAP
 

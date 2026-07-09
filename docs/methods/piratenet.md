@@ -37,7 +37,7 @@ x^{(l+1)} &= \alpha^{(l)}\, h^{(l)} + \big(1 - \alpha^{(l)}\big)\, x^{(l)} .
 \end{aligned}
 $$
 
-![PirateNet residual block](/jaxpi2/methods/piratenet_block.png)
+![PirateNet residual block](/jaxpi2/methods/piratenet_block.svg)
 
 The key design is the **adaptive skip** $\alpha^{(l)} \in \mathbb{R}$:
 

@@ -9,6 +9,7 @@
   },
   "devDependencies": {
     "markdown-it-mathjax3": "^4.3.2",
+    "mathjax-full": "^3.2.2",
     "vitepress": "^1.6.3"
   }
 }

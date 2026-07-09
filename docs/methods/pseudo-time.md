@@ -41,7 +41,7 @@ $O(h^{-1})$ to $O(\tau^2 h^{-3})$ — the hidden defect becomes glaring, and tra
 steered away from the spurious attractor. Collocation resampling is essential to the
 mechanism.
 
-![Pseudo-time stepping amplifies hidden residual defects](/jaxpi2/methods/pseudo_time.png)
+![Pseudo-time stepping amplifies hidden residual defects](/jaxpi2/methods/pseudo_time.svg)
 
 ## Adaptive step size
 

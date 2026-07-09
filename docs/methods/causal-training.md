@@ -31,7 +31,7 @@ with $w_1 = 1$. The gates $w_i$ are treated as constants (`stop_gradient`). Slic
 receives significant weight only once **all earlier** residuals are small — training sweeps
 through time automatically:
 
-![Causal gates during training](/jaxpi2/methods/causal_weights.png)
+![Causal gates during training](/jaxpi2/methods/causal_weights.svg)
 
 The causality parameter $\varepsilon$ controls the steepness of the gate. A useful
 convergence diagnostic falls out for free: training is done when $\min_i w_i \approx 1$
