@@ -45,8 +45,9 @@ The core package `jaxpi/` is intentionally small; problem-specific physics lives
 | `jaxpi/logging.py` | Console logger |
 
 Each example follows the same template: `models.py` (PDE residual and losses), `evaluators.py`
-(problem-specific metrics), `train.py` (data, samplers, and a call into the shared trainer),
+(problem-specific metrics), `main.py` (data, samplers, and a call into the shared trainer),
 `configs/` (hyperparameters as `ml_collections` configs), and `eval.ipynb` (post-training analysis).
+(`taylor_green` additionally keeps its two training modes in `train.py` / `train_multi_stage.py`.)
 
 Note that `r_net` implementations with multiple residual components must return a **dict**
 (e.g. `{"ru": ru, "rv": rv, "rc": rc}`) so that components are matched to their loss and
