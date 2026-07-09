@@ -17,7 +17,7 @@ class KSEvaluator(BaseEvaluator):
     def __call__(self, model, state, loss_dict, batch, u_ref):
         self.log_dict = super().__call__(model, state, loss_dict, batch)
         if self.config.logging.log_errors:
-            self.log_dict["l2_error"] = model.compute_l2_error(state.params, u_ref)
+            self.log_dict["error/l2"] = model.compute_l2_error(state.params, u_ref)
         return self.log_dict
 ```
 

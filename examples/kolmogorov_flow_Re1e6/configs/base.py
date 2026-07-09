@@ -53,10 +53,12 @@ def get_base_config():
     # Training
     config.training = training = ml_collections.ConfigDict()
     training.max_steps = 50000
-    training.batch_size = 8192
+    # Global batch, sharded across devices. Fits 65,536 points per 183GB GPU
+    # (the grad-norm weight update is the memory peak) -> scale by GPU count.
+    training.batch_size = 65536
     training.ics_batch_size = 32768
-    training.time_window_size = 0.1
-    training.num_time_windows = 1
+    training.time_window_size = 0.2
+    training.num_time_windows = 40  # 40 x 0.2 covers t in [0.1, 8.1]
     training.transfer_learning = True
     # Continue from the last checkpointed time window on re-invocation
     training.resume = True

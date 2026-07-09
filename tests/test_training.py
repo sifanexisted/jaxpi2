@@ -50,7 +50,7 @@ def test_train_loop_reduces_loss_and_checkpoints(tmp_path, batches, offline_wand
     losses = []
 
     def spy(step, log_dict):
-        losses.append(log_dict["ics_loss"] + log_dict["res_loss"])
+        losses.append(log_dict["loss/ics"] + log_dict["loss/res"])
         return False
 
     ckpt_mngr = create_checkpoint_manager(config.saving, str(tmp_path / "ckpt"))

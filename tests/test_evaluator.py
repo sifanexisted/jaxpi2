@@ -39,14 +39,14 @@ def test_evaluator_logs_all_metrics():
     expected_keys = {
         "lr",
         # losses
-        "u_ic_loss", "v_ic_loss", "ra_loss", "rb_loss",
+        "loss/u_ic", "loss/v_ic", "loss/ra", "loss/rb",
         # raw (unweighted, non-causal) residual losses
-        "ra_raw_loss", "rb_raw_loss",
+        "raw_loss/ra", "raw_loss/rb",
         # adaptive weights
-        "u_ic_loss_weight", "v_ic_loss_weight", "ra_loss_weight", "rb_loss_weight",
-        "ra_pts_weight", "rb_pts_weight",
+        "weights/u_ic", "weights/v_ic", "weights/ra", "weights/rb",
+        "pts_weights/ra", "pts_weights/rb",
         # gradient norms
-        "u_ic_grad_norm", "v_ic_grad_norm", "ra_grad_norm", "rb_grad_norm",
+        "grads/u_ic", "grads/v_ic", "grads/ra", "grads/rb",
     }
     assert expected_keys <= set(log_dict.keys())
     for key, value in log_dict.items():
@@ -122,5 +122,5 @@ def test_evaluator_accepts_plain_array_batch():
     state, loss, loss_dict = model.step(model.state, batch)
     log_dict = evaluator(model, state, loss_dict, batch)
 
-    assert "res_raw_loss" in log_dict
-    assert "res_grad_norm" in log_dict and "ics_grad_norm" in log_dict
+    assert "raw_loss/res" in log_dict
+    assert "grads/res" in log_dict and "grads/ics" in log_dict

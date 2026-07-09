@@ -35,7 +35,7 @@ through time automatically:
 
 The causality parameter $\varepsilon$ controls the steepness of the gate. A useful
 convergence diagnostic falls out for free: training is done when $\min_i w_i \approx 1$
-(JAXPI logs this as `cas_weight`).
+(JAXPI logs this as `causal/min_weight`).
 
 ## In JAXPI
 

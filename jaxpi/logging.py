@@ -3,13 +3,11 @@ from tabulate import tabulate
 
 
 def get_log_keys(log_dict):
-    key_list = []
-    for key in log_dict.keys():
-        if key.endswith("_loss"):
-            key_list.append(key)
-        elif key.endswith("_error"):
-            key_list.append(key)
-    return key_list
+    # Metric keys are namespaced "section/name" (see jaxpi.evaluator);
+    # tabulate the loss and error sections on the console.
+    return [
+        key for key in log_dict if key.startswith(("loss/", "error/"))
+    ]
 
 
 class Logger:

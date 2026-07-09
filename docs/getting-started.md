@@ -34,9 +34,9 @@ You will see a periodic table of losses and errors in the console:
 ```
 [12:57:54 - main - INFO]  Iter: 500    Time: 12.3
 [12:57:54 - main - INFO]  ---------  ----------
-[12:57:54 - main - INFO]  ics_loss   3.300e-01
-[12:57:54 - main - INFO]  res_loss   1.022e-01
-[12:57:54 - main - INFO]  l2_error   8.410e-02
+[12:57:54 - main - INFO]  loss/ics   3.300e-01
+[12:57:54 - main - INFO]  loss/res   1.022e-01
+[12:57:54 - main - INFO]  error/l2   8.410e-02
 ```
 
 ## Configuration
