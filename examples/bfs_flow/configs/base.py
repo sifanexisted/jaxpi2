@@ -41,6 +41,7 @@ def get_base_config():
     # Training
     config.training = training = ml_collections.ConfigDict()
     training.max_steps = 100000
+    training.resume = False
     training.batch_size = 2048
     training.random_sampling = True
 

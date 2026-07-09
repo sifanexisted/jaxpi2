@@ -5,14 +5,35 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "jaxpi2"
 version = "2.0.0"
-description = ""
+description = "Physics-informed neural networks in JAX"
 readme = "README.md"
 authors = [
     { name = "Sifan Wang", email = "sifan.wang@yale.edu" }
 ]
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "jax==0.10.2",
+    "jax[cuda13-local]==0.10.2; sys_platform == 'linux'",
+    "flax==0.12.3",
+    "optax>=0.2.6",
+    "orbax-checkpoint>=0.11.32",
+    "soap-jax @ git+https://github.com/haydn-jones/SOAP_JAX@v0.2.1",
+    "ml-collections",
+    "absl-py",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "wandb",
+    "tabulate",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["jaxpi*"]

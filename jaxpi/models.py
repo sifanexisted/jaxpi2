@@ -1,16 +1,14 @@
+import itertools
 from functools import partial
-from typing import Any, Callable, Sequence, Tuple, Optional, Dict
+from typing import Any, Dict
 
 from flax.training import train_state
 
 import jax
 import jax.numpy as jnp
-from jax import lax, jit, grad, vmap, value_and_grad, random, tree_map, jacfwd, jacrev
+from jax import lax, jit, vmap, value_and_grad, random, jacrev
 from jax.tree_util import tree_map, tree_reduce, tree_leaves
-
-from jax.experimental.shard_map import shard_map
-from jax.experimental import mesh_utils, multihost_utils
-from jax.sharding import Mesh, PartitionSpec as P
+from jax.sharding import PartitionSpec as P
 
 import optax
 
@@ -20,10 +18,25 @@ from jaxpi.utils import flatten_pytree
 from soap_jax import soap
 
 
+def _axis_is_bound(axis_name="batch"):
+    """Return True when tracing under a shard_map that binds `axis_name`.
+
+    Lets the same loss code run both inside the sharded training step (where
+    cross-device collectives are required for correctness) and outside of it
+    (e.g. evaluator calls on the full, unsharded batch).
+    """
+    try:
+        lax.axis_index(axis_name)
+        return True
+    except NameError:
+        return False
+
+
 class TrainState(train_state.TrainState):
     loss_weights: Dict
     pts_weights: Dict
     momentum: float
+    pts_momentum: float
     prev_params: Any = None
 
     def apply_loss_weights(self, loss_weights, **kwargs):
@@ -40,7 +53,8 @@ class TrainState(train_state.TrainState):
 
     def apply_pts_weights(self, pts_weights, **kwargs):
         running_average = (
-            lambda old_w, new_w: old_w * self.momentum + (1 - self.momentum) * new_w
+            lambda old_w, new_w: old_w * self.pts_momentum
+            + (1 - self.pts_momentum) * new_w
         )
         pts_weights = tree_map(running_average, self.pts_weights, pts_weights)
         pts_weights = lax.stop_gradient(pts_weights)
@@ -87,6 +101,8 @@ def create_lr_schedule(config):
             decay_steps=config.decay_steps,  # total number of steps for decay
             end_value=config.end_learning_rate,
         )
+    else:
+        raise NotImplementedError(f"LR schedule {config.lr_schedule} not supported yet!")
     return lr
 
 
@@ -118,6 +134,9 @@ def create_optimizer(config, lr):
             adam_b1=0.99
         )
 
+    else:
+        raise NotImplementedError(f"Optimizer {config.optimizer} not supported yet!")
+
     if config.schedule_free:
         tx = optax.chain(
             optax.clip_by_global_norm(1.0),
@@ -127,17 +146,27 @@ def create_optimizer(config, lr):
     return tx
 
 
+def create_model(config, model_cls, *model_args, params=None, **model_kwargs):
+    """Build a model from its config: lr schedule, optimizer, arch, state.
+
+    `model_args` / `model_kwargs` are forwarded to the model constructor
+    (problem-specific arguments such as initial conditions or physical
+    parameters). `params` warm-starts the train state (transfer learning).
+    """
+    lr = create_lr_schedule(config.optim)
+    tx = create_optimizer(config.optim, lr)
+    arch = create_arch(config.arch)
+    state = create_train_state(config, tx, arch, params=params)
+    return model_cls(config, lr, tx, arch, state, *model_args, **model_kwargs)
+
+
 def create_train_state(config, tx, arch, params=None, train_state_cls=TrainState):
     # Initialize network
     x = jnp.ones(config.input_dim)
     if params is None:  # if not then, used for transfer learning
         params = arch.init(random.PRNGKey(config.seed), x)
 
-    # if config.pseudo_time.enabled:
     pts_weights = dict(config.pseudo_time.pts_weights)
-    # else:
-    #     pts_weights = None
-
     loss_weights = dict(config.loss_weighting.loss_weights)
 
     state = train_state_cls.create(
@@ -148,19 +177,32 @@ def create_train_state(config, tx, arch, params=None, train_state_cls=TrainState
         loss_weights=loss_weights,
         pts_weights=pts_weights,
         momentum=config.loss_weighting.momentum,
+        pts_momentum=config.pseudo_time.momentum,
     )
 
     return state
 
 
 class PINN:
+    _uid_counter = itertools.count()
+
     def __init__(self, config, lr, tx, arch, state):
+        # Methods decorated with jit(static_argnums=0) key their trace cache
+        # on hash(self). The default id()-based hash can be reused after
+        # garbage collection, silently resurrecting a previous model's traces
+        # (with its constants, e.g. ICs or causal settings, baked in). A
+        # process-unique id makes such collisions impossible.
+        self._uid = next(PINN._uid_counter)
+
         self.config = config
         self.lr = lr
         self.tx = tx
         self.arch = arch
         self.state = state
-        self.mesh = Mesh(mesh_utils.create_device_mesh((jax.device_count(),)), "batch")
+        self.mesh = jax.make_mesh(
+            (jax.device_count(),), ("batch",),
+            axis_types=(jax.sharding.AxisType.Auto,),
+        )
 
         self.step = self.create_step_fn()
         self.update_loss_weights = self.create_update_loss_weights_fn()
@@ -168,6 +210,12 @@ class PINN:
 
         self.sol_pred_fn = vmap(self.neural_net, (None,) + (0,) * self.config.input_dim)
         self.r_pred_fn = vmap(self.r_net, (None,) + (0,) * self.config.input_dim)
+
+    def __hash__(self):
+        return self._uid
+
+    def __eq__(self, other):
+        return self is other
 
     def neural_net(self, params, *args):
         raise NotImplementedError("Subclasses should implement this!")
@@ -178,7 +226,41 @@ class PINN:
     def losses(self, params, state, batch):
         raise NotImplementedError("Subclasses should implement this!")
 
-    @partial(jit, static_argnums=(0,))
+    def _stack_residuals(self, res, state):
+        """Name and stack r_net outputs into keys and a (n_components, N) array.
+
+        Multi-component r_net implementations must return a dict, so that the
+        component names travel with the values (e.g. {"ru": ru, "rv": rv,
+        "rc": rc}). A bare array (or 1-tuple) is also supported for
+        single-component problems and is labeled with the single pts_weights
+        key. Unnamed multi-component returns are rejected: matching them to
+        pts_weights by dict iteration order (alphabetical for ConfigDict)
+        silently mislabels losses and misapplies pseudo-time weights.
+        """
+        if isinstance(res, dict):
+            keys = list(res.keys())
+            assert set(keys) == set(state.pts_weights.keys()), (
+                f"r_net returned residual keys {keys}, but pts_weights has "
+                f"keys {list(state.pts_weights.keys())}; they must match"
+            )
+            res = jnp.stack(list(res.values()))
+        else:
+            keys = list(state.pts_weights.keys())
+            res = jnp.stack(res)
+            if res.ndim == 1:
+                res = res[None, :]
+            assert res.shape[0] == 1 and len(keys) == 1, (
+                f"r_net returned {res.shape[0]} unnamed residual components "
+                f"for pts_weights keys {keys}. Return a dict from r_net "
+                '(e.g. {"ru": ru, "rv": rv, "rc": rc}) so that components '
+                "are matched to their weights by name"
+            )
+        return keys, res
+
+    def _pts_weight_vector(self, keys, state):
+        """Pseudo-time weights as a vector in residual-component order."""
+        return jnp.array([state.pts_weights[key] for key in keys])
+
     def compute_pts_weights(self, state, init_state, batch):
         # Unpack all columns regardless of batch dimensionality (t,x) or (t,x,y) etc.
         coords = tuple(batch[:, i] for i in range(batch.shape[1]))
@@ -187,14 +269,26 @@ class PINN:
         sols_pred = jnp.stack(self.sol_pred_fn(state.params, *coords))
         sols_prev = jnp.stack(self.sol_pred_fn(state.prev_params, *coords))
 
-        res_pred = jnp.stack(self.r_pred_fn(state.params, *coords))
-        res_prev = jnp.stack(self.r_pred_fn(state.prev_params, *coords))
+        keys, res_pred = self._stack_residuals(self.r_pred_fn(state.params, *coords), state)
+        _, res_prev = self._stack_residuals(self.r_pred_fn(state.prev_params, *coords), state)
+        _, res0_pred = self._stack_residuals(self.r_pred_fn(init_state.params, *coords), state)
 
-        res0_perd = jnp.stack(self.r_pred_fn(init_state.params, *coords))
+        if sols_pred.ndim == 1:
+            sols_pred = sols_pred[None, :]  # (n_components, N)
+            sols_prev = sols_prev[None, :]  # (n_components, N)
 
-        if res0_perd.ndim == 1:
-            res0_perd = res0_perd[None, :]
-        losses0 = jnp.mean(res0_perd ** 2, axis=1)  # (n_components,)
+        # Reductions must be global when the batch is sharded across devices,
+        # so that all devices agree on the resulting weights.
+        if _axis_is_bound("batch"):
+            global_mean = lambda x: lax.pmean(x, "batch")
+            global_norm = lambda x: jnp.sqrt(
+                lax.psum(jnp.sum(x**2, axis=1), "batch")
+            )
+        else:
+            global_mean = lambda x: x
+            global_norm = lambda x: jnp.linalg.norm(x, axis=1)
+
+        losses0 = global_mean(jnp.mean(res0_pred ** 2, axis=1))  # (n_components,)
 
         def cosine_decay_from_loss(
                 losses,
@@ -208,16 +302,10 @@ class PINN:
             p = jnp.clip((log_drop - start_log_drop) / (end_log_drop - start_log_drop), 0.0, 1.0)
             return min_factor + (1.0 - min_factor) * 0.5 * (1.0 + jnp.cos(jnp.pi * p))
 
-        if res_pred.ndim == 1:
-            sols_pred = sols_pred[None, :]  # (n_components, N)
-            sols_prev = sols_prev[None, :]  # (n_components, N)
-            res_pred = res_pred[None, :]
-            res_prev = res_prev[None, :]
-
         sol_diffs = sols_pred - sols_prev
         res_diffs = res_pred - res_prev
 
-        losses = jnp.mean(res_pred ** 2, axis=1)  # (n_components,)
+        losses = global_mean(jnp.mean(res_pred ** 2, axis=1))  # (n_components,)
 
         if self.config.pseudo_time.shrink.enabled:
             factors = cosine_decay_from_loss(
@@ -232,22 +320,24 @@ class PINN:
             factors = 1.0
 
         weights = (
-                jnp.linalg.norm(res_diffs, axis=1)
-                / (jnp.linalg.norm(sol_diffs, axis=1) + 1e-8) * factors
+                global_norm(res_diffs)
+                / (global_norm(sol_diffs) + 1e-8) * factors
         )
-        weights = jnp.clip(weights, a_min=1e-2, a_max=100.0)
+        weights = jnp.clip(weights, 1e-2, 100.0)
         weights = lax.stop_gradient(weights)
 
-        keys = list(state.pts_weights.keys())
         return dict(zip(keys, weights))
 
-    @partial(jit, static_argnums=(0,))
     def compute_loss_weights(self, state, batch):
         """
         Balance losses based on the gradient norms of each loss.
         """
         # Compute the gradient of each loss w.r.t. the parameters
         grads = jacrev(self.losses)(state.params, state, batch)
+
+        # Average gradients over the sharded batch so all devices agree
+        if _axis_is_bound("batch"):
+            grads = lax.pmean(grads, "batch")
 
         # Compute the grad norm of each loss
         grad_norm_dict = {}
@@ -271,19 +361,37 @@ class PINN:
         loss = tree_reduce(lambda x, y: x + y, weighted_losses)
         return loss, loss_dict
 
+    def _shard_batch(self, batch):
+        """Constrain the batch to be sharded along the leading (batch) axis."""
+        sharding = jax.NamedSharding(self.mesh, P("batch"))
+        return tree_map(
+            lambda x: lax.with_sharding_constraint(x, sharding), batch
+        )
+
+    def _replicate(self, tree):
+        """Constrain a pytree (e.g. the train state) to be fully replicated."""
+        sharding = jax.NamedSharding(self.mesh, P())
+        return tree_map(
+            lambda x: lax.with_sharding_constraint(x, sharding), tree
+        )
+
     def create_step_fn(self):
-        @jax.jit
         @partial(
-            shard_map,
+            jax.shard_map,
             mesh=self.mesh,
             in_specs=(P(), P("batch")),
             out_specs=(P(), P(), P()),
-            check_rep=False
+            check_vma=False
         )
-        def step(state, batch):
+        def sharded_step(state, batch):
             prev_params = state.params
             (loss, loss_dict), grads = value_and_grad(self.loss, has_aux=True)(state.params, state, batch)
-            # state = state.apply_gradients(grads=grads)
+            # Average the loss and gradients over the sharded batch; without
+            # this each device would apply a different update and the
+            # replicated parameters would silently diverge.
+            loss = lax.pmean(loss, "batch")
+            loss_dict = lax.pmean(loss_dict, "batch")
+            grads = lax.pmean(grads, "batch")
             updates, new_opt_state = state.tx.update(grads, state.opt_state, state.params)
             new_params = optax.apply_updates(state.params, updates)
             state = state.replace(
@@ -294,37 +402,49 @@ class PINN:
             )
             return state, loss, loss_dict
 
+        @jax.jit
+        def step(state, batch):
+            return sharded_step(self._replicate(state), self._shard_batch(batch))
+
         return step
 
     def create_update_loss_weights_fn(self):
-        @jax.jit
         @partial(
-            shard_map,
+            jax.shard_map,
             mesh=self.mesh,
             in_specs=(P(), P("batch")),
             out_specs=P(),
-            check_rep=False
+            check_vma=False
         )
-        def update_loss_weights(state, batch):
+        def sharded_update(state, batch):
             loss_weights = self.compute_loss_weights(state, batch)
             state = state.apply_loss_weights(loss_weights=loss_weights)
             return state
 
+        @jax.jit
+        def update_loss_weights(state, batch):
+            return sharded_update(self._replicate(state), self._shard_batch(batch))
+
         return update_loss_weights
 
     def create_update_pts_weights_fn(self):
-        @jax.jit
         @partial(
-            shard_map,
+            jax.shard_map,
             mesh=self.mesh,
             in_specs=(P(), P(), P("batch")),
             out_specs=P(),
-            check_rep=False
+            check_vma=False
         )
-        def update_pts_weights(state, prev_state, batch):
+        def sharded_update(state, prev_state, batch):
             pts_weights = self.compute_pts_weights(state, prev_state, batch)
             state = state.apply_pts_weights(pts_weights=pts_weights)
             return state
+
+        @jax.jit
+        def update_pts_weights(state, prev_state, batch):
+            return sharded_update(
+                self._replicate(state), self._replicate(prev_state), self._shard_batch(batch)
+            )
 
         return update_pts_weights
 
@@ -332,26 +452,22 @@ class PINN:
 class ForwardIVP(PINN):
     def __init__(self, config, lr, tx, arch, state):
         super().__init__(config, lr, tx, arch, state)
-        if config.causal.enabled:
-            self.tol = config.causal.tol
-            self.num_chunks = config.causal.num_chunks
-            self.triu = jnp.triu(jnp.ones((self.num_chunks, self.num_chunks)), k=1)
+        self.tol = config.causal.tol
+        self.num_chunks = config.causal.num_chunks
+        self.triu = jnp.triu(jnp.ones((self.num_chunks, self.num_chunks)), k=1)
 
     @partial(jit, static_argnums=(0,))
     def compute_causal_weights(self, state, batch):
         coords = tuple(batch[:, i] for i in range(batch.shape[1]))
 
         # Stack residuals: shape (n_components, N)
-        res = jnp.stack(self.r_pred_fn(state.params, *coords))
-
-        if res.ndim == 1:
-            res = res[None, :]
+        keys, res = self._stack_residuals(self.r_pred_fn(state.params, *coords), state)
 
         if self.config.pseudo_time.enabled:
             sols_pred = jnp.stack(self.sol_pred_fn(state.params, *coords))
             sols_prev = jnp.stack(self.sol_pred_fn(state.prev_params, *coords))
 
-            pts_weights = jnp.array(list(state.pts_weights.values()))  # (n_components,)
+            pts_weights = self._pts_weight_vector(keys, state)  # (n_components,)
             res = res + pts_weights[:, None] * (sols_pred - sols_prev)
 
         # Chunk, loss, and causal weights — all vectorised over components
@@ -363,29 +479,64 @@ class ForwardIVP(PINN):
 
         return gammas.min(axis=0)
 
-    # @partial(jit, static_argnums=(0,))
+    def _causal_losses(self, res_pred):
+        """Causally weighted per-component losses for time-sorted residuals.
+
+        `res_pred` has shape (n_components, N) with points sorted by time. The
+        *global* batch is split into `causal.num_chunks` chunks and each chunk
+        is gated by the cumulative loss of all *earlier* chunks. Under
+        shard_map the batch is time-sorted globally and split contiguously
+        across devices, so per-device chunk losses concatenated in device order
+        recover the global time ordering. Each device returns its local share
+        of the global loss, so that pmean over devices yields the global
+        causal loss (and its exact gradient) for any device count.
+        """
+        num_devices = self.mesh.shape["batch"] if _axis_is_bound("batch") else 1
+
+        assert self.num_chunks % num_devices == 0, (
+            f"causal.num_chunks={self.num_chunks} must be divisible by the "
+            f"number of devices {num_devices}"
+        )
+        local_chunks = self.num_chunks // num_devices
+
+        assert res_pred.shape[1] % local_chunks == 0, (
+            f"Residual batch of {res_pred.shape[1]} points (per device) is not "
+            f"divisible by its {local_chunks} local causal chunks"
+        )
+
+        # (n_components, local_chunks)
+        res_pred = res_pred.reshape(res_pred.shape[0], local_chunks, -1)
+        chunk_loss = jnp.mean(res_pred**2, axis=2)
+
+        if num_devices > 1:
+            # (n_components, num_chunks) in global time order
+            chunk_loss_global = lax.all_gather(chunk_loss, "batch", axis=1, tiled=True)
+            gammas = lax.stop_gradient(
+                jnp.exp(-self.tol * (chunk_loss_global @ self.triu))
+            )  # (n_components, num_chunks)
+            # This device's slice of the global causal weights
+            start = lax.axis_index("batch") * local_chunks
+            gammas = lax.dynamic_slice_in_dim(gammas, start, local_chunks, axis=1)
+        else:
+            gammas = lax.stop_gradient(
+                jnp.exp(-self.tol * (chunk_loss @ self.triu))
+            )  # (n_components, num_chunks)
+
+        return jnp.mean(chunk_loss * gammas, axis=1)
+
     def compute_residual_losses(self, params, state, batch, pseudo_time=False, causal=False):
-        keys = list(state.pts_weights.keys())  # TODO: Seperate IC/BC and PDE keys
         coords = tuple(batch[:, i] for i in range(batch.shape[1]))
 
-        res_pred = jnp.stack(self.r_pred_fn(params, *coords))  # (n_components, N)
-
-        if res_pred.ndim == 1:
-            res_pred = res_pred[None, :]
+        keys, res_pred = self._stack_residuals(self.r_pred_fn(params, *coords), state)
 
         if pseudo_time:
             sols_pred = jnp.stack(self.sol_pred_fn(params, *coords))
             sols_prev = jnp.stack(self.sol_pred_fn(state.prev_params, *coords))
-            pts_weights = jnp.array(list(state.pts_weights.values()))  # (n_components,)
+            pts_weights = self._pts_weight_vector(keys, state)  # (n_components,)
             res_pred = res_pred + pts_weights[:, None] * (sols_pred - sols_prev)
 
         if causal:
-            res_pred = res_pred.reshape(res_pred.shape[0], self.num_chunks, -1)  # (n_components, chunks, n)
-            chunk_loss = jnp.mean(res_pred ** 2, axis=2)  # (n_components, chunks)
-            causal_weights = lax.stop_gradient(
-                jnp.exp(-self.tol * (chunk_loss @ self.triu.T))
-            )  # (K, chunks)
-            per_key_losses = jnp.mean(chunk_loss * causal_weights, axis=1)  # (n_components,)
+            per_key_losses = self._causal_losses(res_pred)  # (n_components,)
         else:
             per_key_losses = jnp.mean(res_pred ** 2, axis=1)  # (n_components,)
 
@@ -396,20 +547,15 @@ class ForwardBVP(PINN):
     def __init__(self, config, lr, tx, arch, state):
         super().__init__(config, lr, tx, arch, state)
 
-    # @partial(jit, static_argnums=(0,))
     def compute_residual_losses(self, params, state, batch, pseudo_time=False):
-        keys = list(state.pts_weights.keys())  # TODO: Seperate IC/BC and PDE keys
         coords = tuple(batch[:, i] for i in range(batch.shape[1]))
 
-        res_pred = jnp.stack(self.r_pred_fn(params, *coords))  # (n_components, N)
-
-        if res_pred.ndim == 1:
-            res_pred = res_pred[None, :]
+        keys, res_pred = self._stack_residuals(self.r_pred_fn(params, *coords), state)
 
         if pseudo_time:
             sols_pred = jnp.stack(self.sol_pred_fn(params, *coords))
             sols_prev = jnp.stack(self.sol_pred_fn(state.prev_params, *coords))
-            pts_weights = jnp.array(list(state.pts_weights.values()))  # (n_components,)
+            pts_weights = self._pts_weight_vector(keys, state)  # (n_components,)
             res_pred = res_pred + pts_weights[:, None] * (sols_pred - sols_prev)
 
         per_key_losses = jnp.mean(res_pred ** 2, axis=1)  # (n_components,)

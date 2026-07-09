@@ -19,7 +19,9 @@ class BaseEvaluator:
             self.log_dict[key + "_loss"] = values
 
     def log_raw_losses(self, model, params, state, batch):
-        loss_dict = model.compute_residual_losses(params, state, batch)
+        # Unweighted residual losses (no pseudo-time shift, no causal weights)
+        res_batch = batch["res"] if isinstance(batch, dict) else batch
+        loss_dict = model.compute_residual_losses(params, state, res_batch)
         for key, values in loss_dict.items():
             self.log_dict[key + "_raw_loss"] = values
 
@@ -50,6 +52,10 @@ class BaseEvaluator:
 
         if self.config.logging.log_losses:
             self.log_losses(loss_dict)
+
+        # get() keeps configs written before this flag existed working
+        if self.config.logging.get("log_raw_losses", False):
+            self.log_raw_losses(model, params, state, batch)
 
         if self.config.logging.log_loss_weights:
             self.log_loss_weights(state)

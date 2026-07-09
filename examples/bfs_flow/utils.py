@@ -1,8 +1,5 @@
 import jax.numpy as jnp
 
-import scipy.io
-import pyvista as pv
-
 
 def inflow_profile(y):
     u = jnp.where(y > 0, 24 * y * (0.5 - y), 0)
@@ -11,6 +8,14 @@ def inflow_profile(y):
 
 
 def get_dataset():
+    try:
+        import pyvista as pv
+    except ImportError as e:
+        raise ImportError(
+            "The bfs_flow example reads its reference data from a .vtu file "
+            "and requires pyvista: pip install pyvista"
+        ) from e
+
     reader = pv.get_reader("./data/flow.vtu")
     data = reader.read()
     u_ref = jnp.array(data["Velocity"][:, 0])

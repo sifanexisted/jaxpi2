@@ -5,7 +5,6 @@ import jax.numpy as jnp
 from jax import lax, jit, grad, vmap, pmap, jacrev, hessian
 
 from jaxpi.models import ForwardIVP
-from jaxpi.evaluator import BaseEvaluator
 
 
 class GinzburgLandau(ForwardIVP):
@@ -58,7 +57,7 @@ class GinzburgLandau(ForwardIVP):
         ru = u_t - self.eps * u_laplace - self.k * (u - u * (u ** 2 + v ** 2) + 1.5 * v * (u ** 2 + v ** 2))
         rv = v_t - self.eps * v_laplace - self.k * (v - v * (u ** 2 + v ** 2) - 1.5 * u * (u ** 2 + v ** 2))
 
-        return ru, rv
+        return {"ru": ru, "rv": rv}
 
     @partial(jit, static_argnums=(0,))
     def losses(self, params, state, batch):
@@ -97,36 +96,3 @@ class GinzburgLandau(ForwardIVP):
         v_error = jnp.linalg.norm(v_pred - v_ref) / jnp.linalg.norm(v_ref)
 
         return u_error, v_error
-
-
-class GinzburgLandauEvaluator(BaseEvaluator):
-    def __init__(self, config):
-        super().__init__(config)
-
-    def log_errors(self, model, params, t, coords, u_ref, v_ref):
-        u_error, v_error = model.compute_l2_error(
-            params,
-            t, coords,
-            u_ref,
-            v_ref,
-        )
-        self.log_dict["u_error"] = u_error
-        self.log_dict["v_error"] = v_error
-
-    def __call__(self, model, state, loss_dict, batch, t_star, mesh, u_ref, v_ref):
-        self.log_dict = super().__call__(model, state, loss_dict, batch)
-
-        if self.config.logging.log_errors:
-            self.log_errors(model, state.params, t_star, mesh, u_ref, v_ref)
-
-        if self.config.logging.log_causal_weights:
-            causal_weights = model.compute_causal_weights(state, batch['res'])
-            self.log_dict["cas_weight"] = causal_weights.min()
-
-        if self.config.logging.log_nonlinearities:
-            layer_keys = [key for key in state.params['params'].keys() if
-                          key.endswith(tuple([f"Bottleneck_{i}" for i in range(self.config.arch.num_layers)]))]
-            for i, key in enumerate(layer_keys):
-                self.log_dict[f"alpha_{i}"] = state.params['params'][key]['alpha']
-
-        return self.log_dict

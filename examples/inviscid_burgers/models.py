@@ -5,7 +5,6 @@ import jax.numpy as jnp
 from jax import lax, jit, grad, vmap, pmap, jacrev, hessian
 
 from jaxpi.models import ForwardIVP
-from jaxpi.evaluator import BaseEvaluator
 
 
 class InviscidBurgers(ForwardIVP):
@@ -48,30 +47,3 @@ class InviscidBurgers(ForwardIVP):
         u_pred = vmap(vmap(self.neural_net, (None, None, 0)), (None, 0, None))(params, self.t_star, self.x_star)
         error = jnp.linalg.norm(u_pred - u_test) / jnp.linalg.norm(u_test)
         return error
-
-
-class InviscidBurgersEvaluator(BaseEvaluator):
-    def __init__(self, config):
-        super().__init__(config)
-
-    def log_errors(self, model, params, u_ref):
-        l2_error = model.compute_l2_error(params, u_ref)
-        self.log_dict["l2_error"] = l2_error
-
-    def __call__(self, model, state, loss_dict, batch, u_ref):
-        self.log_dict = super().__call__(model, state, loss_dict, batch)
-
-        if self.config.logging.log_errors:
-            self.log_errors(model, state.params, u_ref)
-
-        if self.config.causal.enabled and self.config.logging.log_causal_weights:
-            causal_weight = model.compute_causal_weights(state, batch)
-            self.log_dict["cas_weight"] = causal_weight.min()
-
-        if self.config.logging.log_nonlinearities:
-            layer_keys = [key for key in state.params['params'].keys() if
-                          key.endswith(tuple([f"Bottleneck_{i}" for i in range(self.config.arch.num_layers)]))]
-            for i, key in enumerate(layer_keys):
-                self.log_dict[f"alpha_{i}"] = state.params['params'][key]['alpha']
-
-        return self.log_dict

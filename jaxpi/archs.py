@@ -1,10 +1,10 @@
-from typing import Any, Callable, Sequence, Tuple, Optional, Union, Dict
+from typing import Tuple, Optional, Union, Dict
 
 from flax import linen as nn
 from flax.core.frozen_dict import freeze
 
 import jax.numpy as jnp
-from jax.nn.initializers import glorot_normal, normal, zeros, constant, uniform
+from jax.nn.initializers import normal, constant
 
 activation_fn = {
     "relu": nn.relu,
@@ -25,7 +25,15 @@ def _get_activation(str):
 
 
 class PeriodEmbs(nn.Module):
-    period: Tuple[float]  # Periods for different axes
+    """Periodic cos/sin embeddings for selected input axes.
+
+    Note: despite its name, `period` is an angular frequency: axis i is
+    embedded as (cos(period_i * x), sin(period_i * x)), so the actual spatial
+    period is 2*pi / period_i. E.g. period=2*pi for a domain of length 1,
+    period=1.0 for a domain of length 2*pi.
+    """
+
+    period: Tuple[float]  # Angular frequencies for the embedded axes
     axis: Tuple[int]  # Axes where the period embeddings are to be applied
     trainable: Tuple[
         bool
@@ -67,6 +75,9 @@ class FourierEmbs(nn.Module):
 
     @nn.compact
     def __call__(self, x):
+        assert self.embed_dim % 2 == 0, (
+            f"fourier_emb.embed_dim must be even, got {self.embed_dim}"
+        )
         kernel = self.param(
             "kernel", normal(self.embed_scale), (x.shape[-1], self.embed_dim // 2)
         )
@@ -145,7 +156,6 @@ class ModifiedMlp(nn.Module):
 
 class PirateBlock(nn.Module):
     hidden_dim: int
-    output_dim: int
     activation: str
     nonlinearity: float
 
@@ -202,6 +212,12 @@ class PirateNet(nn.Module):
         if self.fourier_emb is not None:
             x = FourierEmbs(**self.fourier_emb)(x)
 
+        assert x.shape[-1] == self.hidden_dim, (
+            f"PirateNet residual blocks require the (embedded) input to have "
+            f"hidden_dim={self.hidden_dim} features, got {x.shape[-1]}. "
+            "Use fourier_emb with embed_dim == hidden_dim."
+        )
+
         u = nn.Dense(features=self.hidden_dim)(x)
         u = self.activation_fn(u)
 
@@ -210,7 +226,6 @@ class PirateNet(nn.Module):
 
         for i in range(self.num_layers):
             x = PirateBlock(hidden_dim=self.hidden_dim,
-                            output_dim=x.shape[-1],
                             activation=self.activation,
                             nonlinearity=self.nonlinearities[i])(x, u, v)
 

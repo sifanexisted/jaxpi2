@@ -42,6 +42,7 @@ def get_base_config():
     # Training
     config.training = training = ml_collections.ConfigDict()
     training.max_steps = 100000
+    training.resume = False
     training.batch_size = 4096
 
     # Global weightings for different loss terms
@@ -74,7 +75,7 @@ def get_base_config():
     pseudo_time.enabled = False
     pseudo_time.strategy = "constant"  # "dynamic" or "constant" constant means fixed weights
     pseudo_time.pts_weights = ml_collections.ConfigDict(
-        {"res": 1.0})
+        {"rc": 1.0, "ru": 1.0, "rE": 1.0})
     pseudo_time.update_schedule = ml_collections.ConfigDict({
         "start": 10,
         "every": 100,  # used when schedule="constant"

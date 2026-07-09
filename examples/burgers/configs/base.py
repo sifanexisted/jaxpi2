@@ -45,6 +45,7 @@ def get_base_config():
     # Training
     config.training = training = ml_collections.ConfigDict()
     training.max_steps = 100000
+    training.resume = False
     training.batch_size = 4096
 
     # Global weightings for different loss terms
@@ -99,7 +100,7 @@ def get_base_config():
 
     # Saving
     config.saving = saving = ml_collections.ConfigDict()
-    saving.save_every_steps = None
+    saving.save_every_steps = 10000
     saving.num_keep_ckpts = 2
 
     # Input shape for initializing Flax models

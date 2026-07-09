@@ -47,6 +47,7 @@ def get_base_config():
     # Training
     config.training = training = ml_collections.ConfigDict()
     training.max_steps = 100000
+    training.resume = False
     training.batch_size = 8192
     training.num_time_windows = 1
     training.transfer_learning = True

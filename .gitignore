@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+.pytest_cache/
+wandb/
+.ipynb_checkpoints/
+smoke_test/

@@ -15,6 +15,9 @@ def get_log_keys(log_dict):
 class Logger:
     def __init__(self, name: str = "main"):
         self.logger = logging.getLogger(name)
+        # Set the level explicitly: otherwise it is inherited from the root
+        # logger (WARNING by default) and info() messages are silently dropped.
+        self.logger.setLevel(logging.INFO)
         self.logger.handlers.clear()
         formatter = logging.Formatter(
             "[%(asctime)s - %(name)s - %(levelname)s] %(message)s", datefmt="%H:%M:%S"

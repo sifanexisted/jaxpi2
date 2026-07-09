@@ -2,7 +2,7 @@ import jax.numpy as jnp
 
 
 def get_dataset(time_range=[0.0, 1.0]):
-    data = jnp.load("data/kolmogorov_flow_Re10000.npy", allow_pickle=True).item()
+    data = jnp.load("data/kolmogorov_flow.npy", allow_pickle=True).item()
     w_ref = jnp.array(data["vorticity"])
     velocity = jnp.array(data["velocity"])
 

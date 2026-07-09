@@ -1,18 +1,43 @@
+import itertools
 from functools import partial
 
+import jax
 import jax.numpy as jnp
-from jax import random, jit, local_device_count
-
-from torch.utils.data import Dataset
+from jax import random, jit
 
 
-class BaseSampler(Dataset):
+class BaseSampler:
+    """Infinite iterator over randomly generated batches.
+
+    The global batch is sharded across devices by the training step, so the
+    batch size must be divisible by the number of devices.
+    """
+
+    _uid_counter = itertools.count()
+
     def __init__(self, batch_size, rng_key=random.PRNGKey(1234)):
+        # data_generation is jitted with static self; see PINN.__init__ for
+        # why the default id()-based hash is unsafe across instances.
+        self._uid = next(BaseSampler._uid_counter)
+
         self.batch_size = batch_size
         self.key = rng_key
-        self.num_devices = local_device_count()
+        self.num_devices = jax.device_count()
+        assert batch_size % self.num_devices == 0, (
+            f"Batch size {batch_size} must be divisible by the number of "
+            f"devices {self.num_devices}"
+        )
 
-    def __getitem__(self, index):
+    def __hash__(self):
+        return self._uid
+
+    def __eq__(self, other):
+        return self is other
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
         "Generate one batch of data"
         self.key, subkey = random.split(self.key)
         batch = self.data_generation(subkey)
