@@ -104,4 +104,6 @@ jupyter lab eval.ipynb
 
 - [Core Concepts](/guide/concepts) — how models, samplers, and the trainer fit together
 - [Write Your Own Example](/guide/new-example) — solve your own PDE end to end
+- [Evaluation](/guide/evaluation) — restore checkpoints and compute errors
 - [Examples Gallery](/examples/) — all benchmarks with figures and run commands
+- [Methods](/methods/piratenet) — illustrated deep dives into the baseline's components

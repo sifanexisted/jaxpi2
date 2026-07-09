@@ -49,10 +49,10 @@ def load_dataset(name, *args, **kwargs):
         return utils.get_dataset(*args, **kwargs)
 
 
-def save_field(name, field, cmap, vsym=False):
+def save_field(name, field, cmap, vsym=False, figsize=(4.8, 4.0)):
     """Full-bleed rendering of a 2D field (no axes) for gallery cards."""
     field = np.asarray(field)
-    fig, ax = plt.subplots(figsize=(4.8, 4.0), dpi=150)
+    fig, ax = plt.subplots(figsize=figsize, dpi=150)
     kwargs = {}
     if vsym:
         vmax = np.percentile(np.abs(field), 99.5)
@@ -168,8 +168,10 @@ def main():
     mesh = np.asarray(mesh)
     nx = len(np.unique(np.round(mesh[:, 0], 6)))
     ny = len(np.unique(np.round(mesh[:, 1], 6)))
-    temp = np.asarray(temp).reshape(-1, nx, ny)
-    save_field("rayleigh_taylor", temp[-1], "RdYlBu_r", vsym=False)
+    # The mesh is y-major (x varies fastest): frame layout is (ny, nx).
+    # Transpose to (x, y) so save_field/save_animation display y upward.
+    temp = np.asarray(temp).reshape(-1, ny, nx).transpose(0, 2, 1)
+    save_field("rayleigh_taylor", temp[-1], "RdYlBu_r", vsym=False, figsize=(2.4, 4.8))
     save_animation("rayleigh_taylor", temp[:: max(1, len(temp) // 90)], "RdYlBu_r", vsym=False)
 
     # ---------------------------------------------------- boundary-value flows
@@ -193,12 +195,35 @@ def main():
 
     # ------------------------------------------------------------- 3D problems
     print("taylor_green")
-    # Analytic initial condition: z-vorticity on the z=0 slice
-    n = 512
+    # Analytic IC u = (sin x cos y cos z, -cos x sin y cos z, 0). Render the
+    # periodic cube with the vorticity component normal to each visible face:
+    # w_x = -cos x sin y sin z, w_y = -sin x cos y sin z, w_z = 2 sin x sin y cos z.
+    n = 200
     xs = np.linspace(0, 2 * np.pi, n)
-    X, Y = np.meshgrid(xs, xs, indexing="ij")
-    w_z = -2.0 * np.sin(X) * np.sin(Y)  # curl of (cos x sin y, -sin x cos y) * cos^2(z=0)
-    save_field("taylor_green", w_z, "RdBu_r")
+    A, B = np.meshgrid(xs, xs, indexing="ij")
+    cmap = plt.get_cmap("RdBu_r")
+    norm = lambda f, s: cmap((f / s + 1.0) / 2.0)
+    L = 2 * np.pi
+
+    fig = plt.figure(figsize=(4.8, 4.4), dpi=160)
+    ax = fig.add_subplot(projection="3d", computed_zorder=False)
+    surf_kw = dict(rstride=1, cstride=1, shade=False, antialiased=False)
+    # top face z = L: w_z(A, B, L) = 2 sin A sin B
+    ax.plot_surface(A, B, np.full_like(A, L),
+                    facecolors=norm(2.0 * np.sin(A) * np.sin(B), 2.0), **surf_kw)
+    # front face y = 0: w_y(A, 0, B) = -sin A sin B
+    ax.plot_surface(A, np.zeros_like(A), B,
+                    facecolors=norm(-np.sin(A) * np.sin(B), 1.0), **surf_kw)
+    # side face x = L: w_x(L, A, B) = -sin A sin B
+    ax.plot_surface(np.full_like(A, L), A, B,
+                    facecolors=norm(-np.sin(A) * np.sin(B), 1.0), **surf_kw)
+    ax.set_box_aspect((1, 1, 1))
+    ax.set_axis_off()
+    ax.set_xlim(0, L), ax.set_ylim(0, L), ax.set_zlim(0, L)
+    fig.subplots_adjust(-0.18, -0.18, 1.18, 1.18)
+    fig.savefig(os.path.join(OUT, "taylor_green.png"), transparent=True)
+    plt.close(fig)
+    print("  docs/public/gallery/taylor_green.png")
 
     print("kolmogorov_flow_Re1e6")
     if os.path.exists(args.kf1e6_data):

@@ -4,7 +4,7 @@ layout: home
 hero:
   name: JAXPI
   text: Physics-informed neural networks at scale
-  tagline: A lean JAX library for training PINNs on hard PDEs — multi-GPU sharding, curriculum training strategies, and 16 reproducible benchmarks.
+  tagline: A lean JAX library for physics-informed neural networks.
   image:
     src: /gallery/kolmogorov_flow.png
     alt: Kolmogorov flow vorticity

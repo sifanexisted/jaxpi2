@@ -23,6 +23,8 @@ loss_weighting.update_schedule = {"start": 100, "every": 1000}
 loss_weighting.momentum = 0.9
 ```
 
+Deep dive: [Loss Balancing](/methods/loss-balancing).
+
 ## Causal training
 
 **Problem.** For time-dependent PDEs, the residual can be minimized at late times before the
@@ -49,6 +51,8 @@ causal.tol = 1.0
 Under multi-GPU sharding, chunk losses are gathered across devices in global time order, so
 causality is exact for any device count.
 
+Deep dive: [Causal Training](/methods/causal-training).
+
 ## Pseudo-time stepping
 
 **Problem.** PDEs with unstable equilibria (Gray–Scott, Ginzburg–Landau, high-Re cavity flow)
@@ -72,6 +76,8 @@ pseudo_time.strategy = "dynamic"
 pseudo_time.pts_weights = {"ru": 1.0, "rv": 1.0, "rc": 1.0}
 pseudo_time.shrink.enabled = True
 ```
+
+Deep dive: [Pseudo-Time Stepping](/methods/pseudo-time).
 
 ## Time-window curriculum
 
@@ -117,3 +123,4 @@ each new stage corrects the sum of all previous ones. See
 | Converges to a trivial/steady solution | pseudo-time stepping |
 | Chaotic / long-time dynamics | time windows |
 | Residual plateaus above target accuracy | multi-stage correction |
+| Slow convergence, zigzagging losses | SOAP optimizer ([deep dive](/methods/soap)) |

@@ -1,5 +1,33 @@
 import { defineConfig } from "vitepress";
 
+const guideSidebar = [
+  { text: "Getting Started", link: "/getting-started" },
+  {
+    text: "Guide",
+    items: [
+      { text: "Core Concepts", link: "/guide/concepts" },
+      { text: "The Trainer", link: "/guide/trainer" },
+      { text: "Training Techniques", link: "/guide/training-techniques" },
+      { text: "Architectures", link: "/guide/architectures" },
+      { text: "Evaluation", link: "/guide/evaluation" },
+      { text: "Checkpointing & Resume", link: "/guide/checkpointing" },
+      { text: "Write Your Own Example", link: "/guide/new-example" },
+    ],
+  },
+  {
+    text: "Methods",
+    items: [
+      { text: "PirateNets", link: "/methods/piratenet" },
+      { text: "Loss Balancing", link: "/methods/loss-balancing" },
+      { text: "Causal Training", link: "/methods/causal-training" },
+      { text: "SOAP & Gradient Alignment", link: "/methods/soap" },
+      { text: "Pseudo-Time Stepping", link: "/methods/pseudo-time" },
+    ],
+  },
+  { text: "Theory", link: "/theory" },
+  { text: "About", link: "/about" },
+];
+
 export default defineConfig({
   title: "JAXPI",
   description:
@@ -40,8 +68,19 @@ export default defineConfig({
           { text: "The Trainer", link: "/guide/trainer" },
           { text: "Training Techniques", link: "/guide/training-techniques" },
           { text: "Architectures", link: "/guide/architectures" },
+          { text: "Evaluation", link: "/guide/evaluation" },
           { text: "Checkpointing & Resume", link: "/guide/checkpointing" },
           { text: "Write Your Own Example", link: "/guide/new-example" },
+        ],
+      },
+      {
+        text: "Methods",
+        items: [
+          { text: "PirateNets", link: "/methods/piratenet" },
+          { text: "Loss Balancing", link: "/methods/loss-balancing" },
+          { text: "Causal Training", link: "/methods/causal-training" },
+          { text: "SOAP & Gradient Alignment", link: "/methods/soap" },
+          { text: "Pseudo-Time Stepping", link: "/methods/pseudo-time" },
         ],
       },
       { text: "Examples", link: "/examples/" },
@@ -50,38 +89,11 @@ export default defineConfig({
     ],
 
     sidebar: {
-      "/guide/": [
-        { text: "Getting Started", link: "/getting-started" },
-        {
-          text: "Guide",
-          items: [
-            { text: "Core Concepts", link: "/guide/concepts" },
-            { text: "The Trainer", link: "/guide/trainer" },
-            { text: "Training Techniques", link: "/guide/training-techniques" },
-            { text: "Architectures", link: "/guide/architectures" },
-            { text: "Checkpointing & Resume", link: "/guide/checkpointing" },
-            { text: "Write Your Own Example", link: "/guide/new-example" },
-          ],
-        },
-        { text: "Theory", link: "/theory" },
-        { text: "About", link: "/about" },
-      ],
-      "/getting-started": [
-        { text: "Getting Started", link: "/getting-started" },
-        {
-          text: "Guide",
-          items: [
-            { text: "Core Concepts", link: "/guide/concepts" },
-            { text: "The Trainer", link: "/guide/trainer" },
-            { text: "Training Techniques", link: "/guide/training-techniques" },
-            { text: "Architectures", link: "/guide/architectures" },
-            { text: "Checkpointing & Resume", link: "/guide/checkpointing" },
-            { text: "Write Your Own Example", link: "/guide/new-example" },
-          ],
-        },
-        { text: "Theory", link: "/theory" },
-        { text: "About", link: "/about" },
-      ],
+      "/guide/": guideSidebar,
+      "/getting-started": guideSidebar,
+      "/methods/": guideSidebar,
+      "/theory": guideSidebar,
+      "/about": guideSidebar,
       "/examples/": [
         { text: "Gallery", link: "/examples/" },
         {

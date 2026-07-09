@@ -29,7 +29,8 @@ x^{(l+1)} = \alpha_l\, \mathcal{F}(x^{(l)}) + (1 - \alpha_l)\, x^{(l)},
 $$
 
 with $\alpha_l$ initialized at `config.arch.nonlinearity` (0 = identity). The network starts
-shallow and deepens as training demands — the default for the hard benchmarks.
+shallow and deepens as training demands — the default for the hard benchmarks. Deep dive:
+[PirateNets](/methods/piratenet).
 
 ::: warning PirateNet input width
 The residual blocks require the embedded input to already have `hidden_dim` features — use a

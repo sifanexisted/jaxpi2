@@ -1,7 +1,9 @@
 # Theory
 
 JAXPI integrates training strategies from a line of work on why physics-informed neural
-networks fail and how to fix them. Short summaries and pointers:
+networks fail and how to fix them. Short summaries and pointers below; the
+[Methods](/methods/piratenet) section has illustrated deep dives into each component of the
+baseline (architecture, loss balancing, causal training, SOAP, pseudo-time stepping).
 
 ## Failure modes of PINN training
 
