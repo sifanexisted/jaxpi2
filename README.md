@@ -29,6 +29,50 @@ This repository also releases an extensive range of benchmarking examples, showc
 and robustness of our implementation. Training supports both **single** and **multi-GPU** setups out of
 the box (data-parallel via `jax.shard_map`); evaluation is currently limited to single-GPU setups.
 
+## Gallery
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://sifanexisted.github.io/jaxpi2/examples/kolmogorov_flow"><img src="docs/public/gallery/kolmogorov_flow_Re1e6.png" width="220" alt="Kolmogorov flow at Re 1e6"></a><br>
+      <sub><b>Kolmogorov Flow (Re 10⁶)</b></sub>
+    </td>
+    <td align="center">
+      <a href="https://sifanexisted.github.io/jaxpi2/examples/taylor_green"><img src="docs/public/gallery/taylor_green.png" width="220" alt="Taylor-Green vortex"></a><br>
+      <sub><b>Taylor–Green Vortex (3D)</b></sub>
+    </td>
+    <td align="center">
+      <a href="https://sifanexisted.github.io/jaxpi2/examples/rayleigh_taylor"><img src="docs/public/gallery/rayleigh_taylor.png" width="110" alt="Rayleigh-Taylor instability"></a><br>
+      <sub><b>Rayleigh–Taylor</b></sub>
+    </td>
+    <td align="center">
+      <a href="https://sifanexisted.github.io/jaxpi2/examples/gray_scott"><img src="docs/public/gallery/gray_scott.png" width="220" alt="Gray-Scott patterns"></a><br>
+      <sub><b>Gray–Scott</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="https://sifanexisted.github.io/jaxpi2/examples/ginzburg_landau"><img src="docs/public/gallery/ginzburg_landau.png" width="220" alt="Ginzburg-Landau spirals"></a><br>
+      <sub><b>Ginzburg–Landau</b></sub>
+    </td>
+    <td align="center">
+      <a href="https://sifanexisted.github.io/jaxpi2/examples/ks"><img src="docs/public/gallery/ks.png" width="220" alt="Kuramoto-Sivashinsky chaos"></a><br>
+      <sub><b>Kuramoto–Sivashinsky</b></sub>
+    </td>
+    <td align="center">
+      <a href="https://sifanexisted.github.io/jaxpi2/examples/lid_driven_cavity"><img src="docs/public/gallery/lid_driven_cavity.png" width="220" alt="Lid-driven cavity"></a><br>
+      <sub><b>Lid-driven Cavity (Re 5000)</b></sub>
+    </td>
+    <td align="center">
+      <a href="https://sifanexisted.github.io/jaxpi2/examples/allen_cahn"><img src="docs/public/gallery/allen_cahn.png" width="220" alt="Allen-Cahn"></a><br>
+      <sub><b>Allen–Cahn</b></sub>
+    </td>
+  </tr>
+</table>
+
+Browse all 16 benchmarks with equations, run commands, and animations in the
+[**Examples Gallery**](https://sifanexisted.github.io/jaxpi2/examples/).
+
 ## Installation
 
 Requires Python 3.11 or later. The pinned dependencies (JAX 0.10.2, Flax 0.12.3) target Linux with a
