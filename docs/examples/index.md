@@ -7,7 +7,7 @@ referenced by) each example.
 <div class="gallery-grid">
 
 <a class="gallery-card" href="/jaxpi2/examples/kolmogorov_flow">
-  <img src="/jaxpi2/gallery/kolmogorov_flow_Re1e6.png" alt="Kolmogorov flow">
+  <video src="/jaxpi2/gallery/kolmogorov_flow_Re1e6.mp4" autoplay loop muted playsinline></video>
   <div class="card-body">
     <div class="card-title">Kolmogorov Flow (up to Re 10⁶)</div>
     <div class="card-tags"><span class="tag">2D Navier–Stokes</span><span class="tag">turbulence</span><span class="tag">time windows</span></div>
@@ -23,7 +23,7 @@ referenced by) each example.
 </a>
 
 <a class="gallery-card" href="/jaxpi2/examples/rayleigh_taylor">
-  <img src="/jaxpi2/gallery/rayleigh_taylor.png" alt="Rayleigh-Taylor instability">
+  <video src="/jaxpi2/gallery/rayleigh_taylor.mp4" autoplay loop muted playsinline></video>
   <div class="card-body">
     <div class="card-title">Rayleigh–Taylor</div>
     <div class="card-tags"><span class="tag">Boussinesq</span><span class="tag">time windows</span></div>
@@ -31,7 +31,7 @@ referenced by) each example.
 </a>
 
 <a class="gallery-card" href="/jaxpi2/examples/gray_scott">
-  <img src="/jaxpi2/gallery/gray_scott.png" alt="Gray-Scott">
+  <video src="/jaxpi2/gallery/gray_scott.mp4" autoplay loop muted playsinline></video>
   <div class="card-body">
     <div class="card-title">Gray–Scott</div>
     <div class="card-tags"><span class="tag">reaction–diffusion</span><span class="tag">time windows</span></div>
@@ -39,7 +39,7 @@ referenced by) each example.
 </a>
 
 <a class="gallery-card" href="/jaxpi2/examples/ginzburg_landau">
-  <img src="/jaxpi2/gallery/ginzburg_landau.png" alt="Ginzburg-Landau">
+  <video src="/jaxpi2/gallery/ginzburg_landau.mp4" autoplay loop muted playsinline></video>
   <div class="card-body">
     <div class="card-title">Ginzburg–Landau</div>
     <div class="card-tags"><span class="tag">reaction–diffusion</span><span class="tag">pseudo-time</span></div>

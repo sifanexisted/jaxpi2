@@ -99,6 +99,39 @@ def spacetime(name, u, cmap, vsym=True):
     save_field(name, np.asarray(u), cmap, vsym=vsym)
 
 
+def export_gifs():
+    """Convert the mp4 animations to palette-optimized GIFs for the README
+    (GitHub does not render <video> tags in READMEs)."""
+    import subprocess
+
+    import imageio_ffmpeg
+
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    # name -> (fps, output width)
+    targets = {
+        "kolmogorov_flow": (10, 280),
+        "kolmogorov_flow_Re1e6": (8, 280),
+        "gray_scott": (8, 240),
+        "ginzburg_landau": (10, 280),
+        "rayleigh_taylor": (10, 140),
+    }
+    for name, (fps, width) in targets.items():
+        src = os.path.join(OUT, f"{name}.mp4")
+        if not os.path.exists(src):
+            print(f"  {name}.mp4 missing, gif skipped")
+            continue
+        dst = os.path.join(OUT, f"{name}.gif")
+        vf = (
+            f"fps={fps},scale={width}:-2:flags=lanczos,"
+            "split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer"
+        )
+        subprocess.run(
+            [ffmpeg, "-y", "-i", src, "-vf", vf, "-loop", "0", dst],
+            check=True, capture_output=True,
+        )
+        print(f"  docs/public/gallery/{name}.gif ({os.path.getsize(dst) // 1024} KB)")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -237,6 +270,9 @@ def main():
         )
     else:
         print("  dataset not found, skipped")
+
+    print("gifs")
+    export_gifs()
 
     total = sum(
         os.path.getsize(os.path.join(OUT, f)) for f in os.listdir(OUT)
