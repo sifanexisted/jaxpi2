@@ -128,6 +128,39 @@ def test_train_loop_resume(tmp_path, batches):
         np.testing.assert_allclose(np.asarray(restored), np.asarray(trained))
 
 
+def test_train_loop_resume_keeps_pts_reference(tmp_path, batches):
+    """The pseudo-time reference (init_state) must be the run's initial state
+    even when resuming from a checkpoint, not the restored parameters —
+    otherwise the shrink schedule resets and the weights blow up."""
+    config = small_config(pseudo_time=True)
+    config.saving.save_every_steps = 10
+    model = make_model(config)
+
+    ckpt_mngr = create_checkpoint_manager(config.saving, str(tmp_path / "ckpt"))
+    train_loop(config, model, batches, ckpt_mngr=ckpt_mngr)
+    ckpt_mngr.wait_until_finished()
+
+    # Resume with more steps; capture the init_state passed to the weight update
+    config.training.resume = True
+    config.training.max_steps = 40
+    model2 = make_model(config)
+    fresh_params = jax.tree.leaves(model2.state.params)
+
+    captured = []
+    original = model2.update_pts_weights
+    model2.update_pts_weights = lambda state, init_state, batch: (
+        captured.append(init_state) or original(state, init_state, batch)
+    )
+
+    ckpt_mngr2 = create_checkpoint_manager(config.saving, str(tmp_path / "ckpt"))
+    train_loop(config, model2, batches, ckpt_mngr=ckpt_mngr2)
+
+    assert captured, "no pts weight update fired after resume"
+    assert int(captured[0].step) == 0, "init_state must be the initial state"
+    for ref, fresh in zip(jax.tree.leaves(captured[0].params), fresh_params):
+        np.testing.assert_array_equal(np.asarray(ref), np.asarray(fresh))
+
+
 def test_train_time_windows_hooks_and_transfer(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     config = small_config()

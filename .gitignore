@@ -11,3 +11,5 @@ docs/.vitepress/dist/
 docs/.vitepress/cache/
 examples/kolmogorov_flow_Re1e6/data/*.npy
 ckpt/
+docs/scripts/cache/
+examples/*/configs/local_*.py

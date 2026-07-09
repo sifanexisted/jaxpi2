@@ -61,7 +61,8 @@ class BaseEvaluator:
         if self.config.logging.log_loss_weights:
             self.log_loss_weights(state)
 
-        if self.config.logging.log_pts_weights:
+        # Always log the pseudo-time weights when the method is active
+        if self.config.logging.log_pts_weights or self.config.pseudo_time.enabled:
             self.log_pts_weights(state)
 
         if self.config.logging.log_grads:

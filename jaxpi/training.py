@@ -96,6 +96,12 @@ def train_loop(
     loss_update = create_update_scheduler(**config.loss_weighting.update_schedule)
     pseudo_time_update = create_update_scheduler(**config.pseudo_time.update_schedule)
 
+    # Reference state for pseudo-time weight updates. Captured BEFORE any
+    # checkpoint restore: it must be the run's *initial* state (the shrink
+    # schedule compares current residuals against the initial ones), so a
+    # resumed run keeps the same reference as an uninterrupted one.
+    init_state = model.state
+
     # Resume from this run's checkpoint, if requested and available
     start_step = 0
     if (
@@ -109,7 +115,6 @@ def train_loop(
 
     start_time = time.time()
     print("Waiting for JIT...")
-    init_state = model.state  # Reference state for pseudo-time weight updates
     for step in range(start_step, config.training.max_steps):
         batch = next(batches)
         model.state, loss, loss_dict = model.step(model.state, batch)
@@ -234,6 +239,12 @@ def train_time_windows(
                     model.state = restore_checkpoint(prev_mngr, model.state)
                     if propagate_ic is not None:
                         model = propagate_ic(model, start_idx - 1) or model
+                else:
+                    # Window 1 was interrupted: hand train_loop the same fresh
+                    # initial state an uninterrupted run would start from (it
+                    # restores the mid-window checkpoint itself), so the
+                    # pseudo-time reference state stays correct.
+                    model.state = create_train_state(model.config, model.tx, model.arch)
             else:
                 start_idx = latest
                 logging.info(
