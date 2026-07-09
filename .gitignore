@@ -6,3 +6,6 @@ __pycache__/
 wandb/
 .ipynb_checkpoints/
 smoke_test/
+node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/

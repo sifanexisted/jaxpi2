@@ -1,0 +1,124 @@
+/* JAXPI brand: deep-flow gradient (indigo -> cyan) */
+:root {
+  --vp-c-brand-1: #4f46e5;
+  --vp-c-brand-2: #4338ca;
+  --vp-c-brand-3: #6366f1;
+  --vp-c-brand-soft: rgba(99, 102, 241, 0.14);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #4f46e5 20%, #06b6d4 80%);
+
+  --vp-home-hero-image-background-image: linear-gradient(
+    -45deg,
+    rgba(79, 70, 229, 0.55) 30%,
+    rgba(6, 182, 212, 0.55) 70%
+  );
+  --vp-home-hero-image-filter: blur(56px);
+}
+
+.dark {
+  --vp-c-brand-1: #818cf8;
+  --vp-c-brand-2: #6366f1;
+  --vp-c-brand-3: #a5b4fc;
+  --vp-c-brand-soft: rgba(129, 140, 248, 0.16);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --vp-home-hero-image-filter: blur(72px);
+  }
+}
+
+/* Hero animation (video) styling */
+.VPHero .image-container video,
+.VPHero .image-container img {
+  border-radius: 16px;
+  box-shadow: 0 12px 48px rgba(30, 41, 59, 0.35);
+  max-width: 320px;
+}
+
+/* Gallery card grid */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.gallery-card {
+  display: block;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--vp-c-bg-soft);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  text-decoration: none !important;
+}
+
+.gallery-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(30, 41, 59, 0.18);
+  border-color: var(--vp-c-brand-1);
+}
+
+.gallery-card img,
+.gallery-card video {
+  width: 100%;
+  aspect-ratio: 1.2;
+  object-fit: cover;
+  display: block;
+}
+
+.gallery-card .card-body {
+  padding: 12px 14px 14px;
+}
+
+.gallery-card .card-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--vp-c-text-1);
+}
+
+.gallery-card .card-tags {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gallery-card .tag {
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 9999px;
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
+  font-weight: 500;
+}
+
+/* Teaser strip on the landing page */
+.teaser-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 8px 0 16px;
+}
+
+.teaser-strip img {
+  border-radius: 10px;
+  aspect-ratio: 1;
+  object-fit: cover;
+  width: 100%;
+  transition: transform 0.2s ease;
+}
+
+.teaser-strip img:hover {
+  transform: scale(1.04);
+}
+
+/* Figures inside example pages */
+.example-figure img,
+.example-figure video {
+  border-radius: 12px;
+  margin: 8px 0;
+}

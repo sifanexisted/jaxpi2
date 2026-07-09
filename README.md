@@ -1,5 +1,7 @@
 # JAXPI2
 
+**[📖 Documentation & Examples Gallery](https://sifanexisted.github.io/jaxpi2/)**
+
 This repository is a comprehensive implementation of physics-informed neural networks (PINNs),
 seamlessly integrating several advanced network architectures, training algorithms from these papers
 
