@@ -183,13 +183,13 @@ def test_train_time_windows_resume(tmp_path, monkeypatch):
 
         return gen()
 
-    # Train two windows, then "restart" with 1 more window: the run must
-    # resume from window 2 and train only window 3.
+    # Train two windows, then "restart" asking for 3 total: the run must
+    # resume after window 2 and train only window 3.
     model = make_model(config)
     train_time_windows(config, model, make_samplers)
 
     config.training.resume = True
-    config.training.num_time_windows = 1
+    config.training.num_time_windows = 3
     propagated = []
     model2 = make_model(config)
     train_time_windows(
@@ -202,6 +202,48 @@ def test_train_time_windows_resume(tmp_path, monkeypatch):
     # propagate_ic called once after the resume restore (window 1) and once
     # after the newly trained window (window 2, 0-based)
     assert propagated == [1, 2]
+
+
+def test_train_time_windows_resume_mid_window(tmp_path, monkeypatch):
+    """A window interrupted mid-training is re-entered and finished, not
+    skipped in favor of the next window."""
+    monkeypatch.chdir(tmp_path)
+    config = small_config()
+
+    def make_samplers(window_idx):
+        def gen():
+            key = jax.random.PRNGKey(window_idx)
+            while True:
+                key, subkey = jax.random.split(key)
+                yield make_batch(subkey)
+
+        return gen()
+
+    # "Interrupt" window 2 by training it with fewer steps than the resumed
+    # run will ask for (window 1 completes at 30 steps either way).
+    model = make_model(config)
+    train_time_windows(config, model, make_samplers)  # windows 1, 2 @ 30 steps
+
+    config.training.resume = True
+    config.training.max_steps = 50  # window 2's 30-step checkpoint is partial
+    propagated = []
+    model2 = make_model(config)
+    train_time_windows(
+        config, model2, make_samplers,
+        propagate_ic=lambda m, idx: propagated.append(idx),
+    )
+
+    ckpt_path = get_ckpt_path(config)
+    # Window 2 was finished to 50 steps; no window 3 was started
+    mngr = create_checkpoint_manager(
+        config.saving, ckpt_path, suffix="time_window_2"
+    )
+    assert mngr.latest_step() == 50
+    assert latest_time_window(ckpt_path) == 2
+    assert int(model2.state.step) == 50
+    # propagate_ic: once for the IC of re-entered window 2 (idx 0), once
+    # after window 2 finishes (idx 1)
+    assert propagated == [0, 1]
 
 
 def test_checkpoint_helpers(tmp_path):

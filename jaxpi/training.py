@@ -192,34 +192,59 @@ def train_time_windows(
       make_eval_args: optional `window_idx -> tuple` of extra positional
         arguments for the evaluator (e.g. the window's reference solution).
 
-    Each window `idx` checkpoints under `time_window_{idx + 1}`. When
-    `config.training.resume` is set, training continues from the last window
-    with a checkpoint. When `config.training.transfer_learning` is set, each
-    window starts from the previous window's parameters (with a fresh
-    optimizer state); otherwise from a fresh initialization.
+    Each window `idx` checkpoints under `time_window_{idx + 1}`.
+    `config.training.num_time_windows` is the *total* number of windows. When
+    `config.training.resume` is set, training continues where the checkpoints
+    end: a partially trained window is re-entered and resumes from its last
+    step, a finished window's successor starts fresh. When
+    `config.training.transfer_learning` is set, each window starts from the
+    previous window's parameters (with a fresh optimizer state); otherwise
+    from a fresh initialization.
     """
     logger = Logger()
     _ensure_wandb(config)
     ckpt_path = get_ckpt_path(config)
 
-    # Resume from the last trained time window, if requested and available
+    # Resume from the last checkpointed time window, if requested and available
     start_idx = 0
     if config.training.get("resume", False):
-        start_idx = latest_time_window(ckpt_path)
-        if start_idx > 0:
+        latest = latest_time_window(ckpt_path)
+        if latest > 0:
             ckpt_mngr = create_checkpoint_manager(
-                config.saving, ckpt_path, suffix="time_window_{}".format(start_idx)
+                config.saving, ckpt_path, suffix="time_window_{}".format(latest)
             )
             model.state = restore_checkpoint(ckpt_mngr, model.state)
-            logging.info(
-                "Resuming from time window {} at step {}".format(
-                    start_idx, int(model.state.step)
+            if int(model.state.step) < config.training.max_steps:
+                # Window `latest` was interrupted mid-training: re-enter it
+                # (train_loop restores its checkpoint and continues from its
+                # step). Its IC must be regenerated from the *previous*
+                # window's final parameters.
+                start_idx = latest - 1
+                logging.info(
+                    "Resuming interrupted time window {} at step {}".format(
+                        latest, int(model.state.step)
+                    )
                 )
-            )
-            if propagate_ic is not None:
-                model = propagate_ic(model, start_idx - 1) or model
+                if start_idx > 0:
+                    prev_mngr = create_checkpoint_manager(
+                        config.saving,
+                        ckpt_path,
+                        suffix="time_window_{}".format(start_idx),
+                    )
+                    model.state = restore_checkpoint(prev_mngr, model.state)
+                    if propagate_ic is not None:
+                        model = propagate_ic(model, start_idx - 1) or model
+            else:
+                start_idx = latest
+                logging.info(
+                    "Time window {} complete, resuming with window {}".format(
+                        latest, latest + 1
+                    )
+                )
+                if propagate_ic is not None:
+                    model = propagate_ic(model, start_idx - 1) or model
 
-    for idx in range(start_idx, start_idx + config.training.num_time_windows):
+    for idx in range(start_idx, config.training.num_time_windows):
         logging.info("Training time window {}".format(idx + 1))
 
         if idx > 0:

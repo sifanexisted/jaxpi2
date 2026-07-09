@@ -112,7 +112,9 @@ def get_base_config():
 
     # Saving
     config.saving = saving = ml_collections.ConfigDict()
-    saving.ckpt_path = None  # defaults to <cwd>/<wandb.name>/ckpt
+    # Checkpoint root; defaults to <cwd>/<wandb.name>/ckpt (a typed
+    # placeholder so it can be overridden from the command line)
+    saving.ckpt_path = ml_collections.config_dict.placeholder(str)
     saving.save_every_steps = 5000
     saving.num_keep_ckpts = 2
 
