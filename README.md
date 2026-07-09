@@ -1,5 +1,13 @@
 # JAXPI2
 
+[![Docs](https://img.shields.io/badge/docs-online-4f46e5)](https://sifanexisted.github.io/jaxpi2/)
+[![Deploy docs](https://github.com/sifanexisted/jaxpi2/actions/workflows/docs.yml/badge.svg)](https://github.com/sifanexisted/jaxpi2/actions/workflows/docs.yml)
+[![Tests](https://github.com/sifanexisted/jaxpi2/actions/workflows/tests.yml/badge.svg)](https://github.com/sifanexisted/jaxpi2/actions/workflows/tests.yml)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://github.com/sifanexisted/jaxpi2/blob/main/pyproject.toml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/sifanexisted/jaxpi2/blob/main/LICENSE)
+[![arXiv](https://img.shields.io/badge/arXiv-2604.23528-b31b1b.svg)](https://arxiv.org/abs/2604.23528)
+[![arXiv](https://img.shields.io/badge/arXiv-2502.00604-b31b1b.svg)](https://arxiv.org/abs/2502.00604)
+
 **[📖 Documentation & Examples Gallery](https://sifanexisted.github.io/jaxpi2/)**
 
 This repository is a comprehensive implementation of physics-informed neural networks (PINNs),
