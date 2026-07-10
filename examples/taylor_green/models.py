@@ -17,6 +17,11 @@ class NavierStokes3D(ForwardIVP):
         self.uvwp0_pred_fn = vmap(self.solution_net, (None, None, 0, 0, 0))
         self.vor0_pred_fn = vmap(self.vorticity_net, (None, None, 0, 0, 0))
 
+    def sol_net(self, params, t, x, y, z):
+        # Solution component damped by each residual (paired by key)
+        u, v, w, p = self.neural_net(params, t, x, y, z)
+        return {"ru": u, "rv": v, "rw": w, "rc": p}
+
     def neural_net(self, params, t, x, y, z):
         t = t / self.t_max
         inputs = jnp.stack([t, x, y, z])

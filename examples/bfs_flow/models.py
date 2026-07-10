@@ -24,6 +24,11 @@ class NavierStokes2D(ForwardBVP):
         # Non-dimensionalized domain length and width
         self.L, self.W = self.wall_coords.max(axis=0) - self.wall_coords.min(axis=0)
 
+    def sol_net(self, params, x, y):
+        # Solution component damped by each residual (paired by key)
+        u, v, p = self.neural_net(params, x, y)
+        return {"ru": u, "rv": v, "rc": p}
+
     def neural_net(self, params, x, y):
         x = x / self.L  # rescale x into [0, 1]
         y = y / self.W  # rescale y into [0, 1]

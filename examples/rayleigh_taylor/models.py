@@ -23,6 +23,11 @@ class RayleighTaylor2D(ForwardIVP):
         self.temp_pred_fn = vmap(vmap(self.temp_net, (None, None, 0, 0)), (None, 0, None, None))
         self.r_pred_fn = vmap(self.r_net, (None, 0, 0, 0))
 
+    def sol_net(self, params, t, x, y):
+        # Solution component damped by each residual (paired by key)
+        u, v, p, temp = self.neural_net(params, t, x, y)
+        return {"ru": u, "rv": v, "rc": p, "re": temp}
+
     def neural_net(self, params, t, x, y):
         t = t / self.t_max
         z = jnp.stack([t, x, y])

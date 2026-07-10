@@ -36,6 +36,11 @@ class Euler1D(ForwardIVP):
         self.u_right = 0.0
         self.p_right = 0.1
 
+    def sol_net(self, params, t, x):
+        # Solution component damped by each residual (paired by key)
+        rho, u, p = self.neural_net(params, t, x)
+        return {"rc": rho, "ru": u, "rE": p}
+
     def neural_net(self, params, t, x):
         z = jnp.stack([t, x])
         outputs = self.state.apply_fn(params, z)

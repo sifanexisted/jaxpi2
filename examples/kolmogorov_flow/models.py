@@ -21,6 +21,11 @@ class NavierStokes2D(ForwardIVP):
         self.v_pred_fn = vmap(vmap(self.v_net, (None, None, 0, 0)), (None, 0, None, None))
         self.w_pred_fn = vmap(vmap(self.w_net, (None, None, 0, 0)), (None, 0, None, None))
 
+    def sol_net(self, params, t, x, y):
+        # Solution component damped by each residual (paired by key)
+        u, v, p = self.neural_net(params, t, x, y)
+        return {"ru": u, "rv": v, "rc": p}
+
     def neural_net(self, params, t, x, y):
         t = t / self.t_max
         z = jnp.stack([t, x, y])

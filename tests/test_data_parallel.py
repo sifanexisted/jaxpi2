@@ -34,6 +34,10 @@ class StressIVP(ForwardIVP):
         out = self.state.apply_fn(params, z)
         return out[0], out[1]
 
+    def sol_net(self, params, t, x):
+        u, v = self.neural_net(params, t, x)
+        return {"rb": u, "ra": v}
+
     def u_net(self, params, t, x):
         return self.neural_net(params, t, x)[0]
 

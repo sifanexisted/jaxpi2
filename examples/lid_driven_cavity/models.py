@@ -30,6 +30,11 @@ class NavierStokes2D(ForwardBVP):
         self.v_pred_fn = vmap(self.v_net, (None, 0, 0))
         self.p_pred_fn = vmap(self.p_net, (None, 0, 0))
 
+    def sol_net(self, params, x, y):
+        # Solution component damped by each residual (paired by key)
+        u, v, p = self.neural_net(params, x, y)
+        return {"ru": u, "rv": v, "rc": p}
+
     def neural_net(self, params, x, y):
         z = jnp.stack([x, y])
         outputs = self.state.apply_fn(params, z)

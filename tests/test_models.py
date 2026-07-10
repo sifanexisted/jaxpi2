@@ -258,12 +258,10 @@ def test_update_pts_weights_matches_reference():
 
 def test_pseudo_time_pairs_residuals_with_their_solutions():
     """The pseudo-time damping must pair each residual with ITS solution
-    component. JAX sorts dict keys when flattening pytrees (residual rows
-    would come back alphabetical while neural_net outputs are positional) —
-    regression test for the misalignment that broke the 3-component
-    Navier-Stokes examples (continuity residual damped toward u-velocity)."""
-    import jax.numpy as jnp
-
+    component. JAX sorts dict keys when flattening pytrees, so any positional
+    convention silently permutes the pairing (the misalignment that broke the
+    3-component Navier-Stokes examples: continuity residual damped toward the
+    u-velocity). Residuals and sol_net components are paired BY KEY."""
     config = make_config(
         out_dim=2,
         loss_weights={"res": 1.0},
@@ -273,32 +271,32 @@ def test_pseudo_time_pairs_residuals_with_their_solutions():
 
     model = make_model(config, model_cls=TwoComponentIVP)
 
-    # r_net declares {"rb": ..., "ra": ...}: declaration order must be
-    # recovered even though JAX would sort the keys to ["ra", "rb"]
-    assert model._res_key_order == ("rb", "ra")
-
     batch = make_batch(jax.random.PRNGKey(0), n=8)
     coords = tuple(batch[:, i] for i in range(batch.shape[1]))
     keys, res = model._stack_residuals(
         model.r_pred_fn(model.state.params, *coords), model.state
     )
-    assert keys == ["rb", "ra"]
-    # rb is identically 0 and ra identically 3 -> rows must not be swapped
-    np.testing.assert_allclose(np.asarray(res[0]), 0.0, atol=1e-6)
-    np.testing.assert_allclose(np.asarray(res[1]), 3.0, atol=1e-6)
+    # rb is identically 0 and ra identically 3: whatever the row order,
+    # keys and rows must stay together
+    by_key = dict(zip(keys, np.asarray(res)))
+    np.testing.assert_allclose(by_key["rb"], 0.0, atol=1e-6)
+    np.testing.assert_allclose(by_key["ra"], 3.0, atol=1e-6)
 
-    # positional pairing: first neural_net output (u) pairs with "rb"
-    u = jnp.ones(4) * 10.0
-    v = jnp.ones(4) * 20.0
-    mat = model._sols_matrix((u, v), keys)
-    np.testing.assert_array_equal(np.asarray(mat[0]), np.asarray(u))  # rb -> u
-    np.testing.assert_array_equal(np.asarray(mat[1]), np.asarray(v))  # ra -> v
+    # sol_net returns {"rb": u, "ra": v}: rows must follow `keys` by name
+    sols = model.sol_pred_fn(model.state.params, *coords)
+    u, v = model.neural_net(model.state.params, batch[0, 0], batch[0, 1])
+    mat = model._sols_matrix(sols, keys)
+    np.testing.assert_allclose(
+        np.asarray(mat[keys.index("rb")][0]), np.asarray(u), rtol=1e-6
+    )
+    np.testing.assert_allclose(
+        np.asarray(mat[keys.index("ra")][0]), np.asarray(v), rtol=1e-6
+    )
 
-    # dict-valued sols are paired by key
-    mat = model._sols_matrix({"ra": v, "rb": u}, keys)
-    np.testing.assert_array_equal(np.asarray(mat[0]), np.asarray(u))
-    np.testing.assert_array_equal(np.asarray(mat[1]), np.asarray(v))
-
-    # component-count mismatches fail loudly
+    # sol_net keys must match the residual keys
     with pytest.raises(AssertionError):
-        model._sols_matrix((u,), keys)
+        model._sols_matrix({"rb": mat[0], "wrong": mat[1]}, keys)
+
+    # multi-component models cannot fall back to the unnamed default sol_net
+    with pytest.raises(AssertionError):
+        model._sols_matrix((mat[0], mat[1]), keys)

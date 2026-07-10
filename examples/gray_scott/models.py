@@ -24,6 +24,11 @@ class GrayScott(ForwardIVP):
         self.u_pred_fn = vmap(vmap(self.u_net, (None, None, 0, 0)), (None, 0, None, None))
         self.v_pred_fn = vmap(vmap(self.v_net, (None, None, 0, 0)), (None, 0, None, None))
 
+    def sol_net(self, params, t, x, y):
+        # Solution component damped by each residual (paired by key)
+        u, v = self.neural_net(params, t, x, y)
+        return {"ru": u, "rv": v}
+
     def neural_net(self, params, t, x, y):
         t = t / self.t_max
         z = jnp.stack([t, x, y])
