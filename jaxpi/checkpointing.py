@@ -1,3 +1,4 @@
+import logging as py_logging
 import os
 import re
 import json
@@ -5,6 +6,21 @@ import json
 import jax
 import jax.numpy as jnp
 import orbax.checkpoint as ocp
+from absl import logging as absl_logging
+
+
+class _DropOrbaxInfo(py_logging.Filter):
+    """Drop Orbax's INFO chatter (~30 lines per async checkpoint save) while
+    keeping its warnings/errors and everything else untouched."""
+
+    def filter(self, record):
+        if record.levelno >= py_logging.WARNING:
+            return True
+        return "orbax" not in getattr(record, "pathname", "")
+
+
+# Orbax logs through absl; filter at the handler so training logs stay clean
+absl_logging.get_absl_handler().addFilter(_DropOrbaxInfo())
 
 
 def get_ckpt_path(config):
