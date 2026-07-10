@@ -10,8 +10,6 @@ from jaxpi.models import ForwardIVP
 class RayleighTaylor2D(ForwardIVP):
     def __init__(self, config, lr, tx, arch, state, t_max, alpha1, alpha2, alpha3, alpha4, ):
         super().__init__(config, lr, tx, arch, state)
-        # Residual key of each neural_net output (u, v, p, temp), for pseudo-time
-        self.pts_pairing = ("ru", "rv", "rc", "re")
 
         self.t_max = t_max
         self.alpha1 = alpha1

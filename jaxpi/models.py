@@ -215,6 +215,41 @@ class PINN:
         self.sol_pred_fn = vmap(self.neural_net, (None,) + (0,) * self.config.input_dim)
         self.r_pred_fn = vmap(self.r_net, (None,) + (0,) * self.config.input_dim)
 
+        # r_net's dict keys in DECLARATION order (see _stack_residuals): JAX
+        # sorts dict keys when flattening pytrees, so vmapped outputs lose the
+        # author's ordering. Captured lazily on first use — r_net usually
+        # depends on subclass attributes that are not set yet at this point.
+        self._res_key_order = None
+
+    def _capture_res_key_order(self):
+        """Trace r_net abstractly once and record its dict keys in the order
+        the model author declared them (Python dicts preserve insertion
+        order; JAX only sorts once the dict is flattened as a pytree)."""
+        captured = []
+
+        def wrapper(params, *args):
+            out = self.r_net(params, *args)
+            if isinstance(out, dict):
+                # `out` is the original dict object, before JAX flattens it,
+                # so .keys() still reflects the declaration order
+                captured.append(tuple(out.keys()))
+            return out
+
+        try:
+            jax.eval_shape(
+                wrapper,
+                self.state.params,
+                *(jnp.zeros(()) for _ in range(self.config.input_dim)),
+            )
+        except Exception as e:
+            raise RuntimeError(
+                "Could not trace r_net to capture its residual declaration "
+                "order (needed to pair residuals with solution components "
+                "for pseudo-time stepping). If r_net has a non-standard "
+                f"signature, override _capture_res_key_order. Cause: {e}"
+            ) from e
+        return captured[0] if captured else None
+
     def __hash__(self):
         return self._uid
 
@@ -240,14 +275,28 @@ class PINN:
         key. Unnamed multi-component returns are rejected: matching them to
         pts_weights by dict iteration order (alphabetical for ConfigDict)
         silently mislabels losses and misapplies pseudo-time weights.
+
+        Rows follow r_net's DECLARATION order (not JAX's sorted-key order):
+        by convention r_net declares residuals in the same order as
+        neural_net returns solution components, and the pseudo-time damping
+        relies on that positional correspondence (see _sols_matrix).
         """
         if isinstance(res, dict):
-            keys = list(res.keys())
-            assert set(keys) == set(state.pts_weights.keys()), (
-                f"r_net returned residual keys {keys}, but pts_weights has "
-                f"keys {list(state.pts_weights.keys())}; they must match"
+            assert set(res.keys()) == set(state.pts_weights.keys()), (
+                f"r_net returned residual keys {list(res.keys())}, but "
+                f"pts_weights has keys {list(state.pts_weights.keys())}; "
+                "they must match"
             )
-            res = jnp.stack(list(res.values()))
+            # vmapped/flattened dicts come back with sorted keys; restore the
+            # author's declaration order captured from r_net itself
+            if len(res) > 1:
+                assert self._res_key_order is not None, (
+                    "Could not determine r_net's residual declaration order "
+                    "(abstract tracing failed); required to pair residuals "
+                    "with solution components for pseudo-time"
+                )
+            keys = list(self._res_key_order or res.keys())
+            res = jnp.stack([res[key] for key in keys])
         else:
             keys = list(state.pts_weights.keys())
             res = jnp.stack(res)
@@ -267,21 +316,15 @@ class PINN:
 
     def _sols_matrix(self, sols, keys):
         """Solution components as a (n_components, N) matrix aligned with the
-        residual-component order `keys`.
+        residual rows.
 
-        JAX sorts dict keys when flattening pytrees, so the rows of the
-        stacked residuals follow the ALPHABETICAL order of the r_net keys —
-        which generally differs from the tuple order of neural_net outputs
-        (e.g. residuals (rc, ru, rv) vs solutions (u, v, p)). Pairing those
-        positionally silently damps each residual toward the WRONG solution
-        component. Multi-component models must therefore declare
-
-            self.pts_pairing = ("ru", "rv", "rc")   # residual key of each
-                                                    # neural_net output, in
-                                                    # output order
-
-        so that the damping term and the adaptive weight estimate pair
-        residuals and solutions by name.
+        `keys` (and the residual rows they label) follow r_net's declaration
+        order — restored by _stack_residuals — and by convention r_net
+        declares one residual per neural_net output, in the same order
+        (e.g. neural_net -> (u, v, p), r_net -> {"ru": .., "rv": .., "rc":
+        ..}). The damping term therefore pairs positionally, exactly like
+        the original per-example implementations. Models whose neural_net
+        returns a dict are paired by key instead.
         """
         if isinstance(sols, dict):
             assert set(sols.keys()) == set(keys), (
@@ -292,21 +335,12 @@ class PINN:
 
         if not isinstance(sols, (tuple, list)):
             sols = (sols,)
-        if len(sols) == 1 and len(keys) == 1:
-            return jnp.stack(sols)
-
-        pairing = getattr(self, "pts_pairing", None)
-        assert pairing is not None, (
-            "Pseudo-time stepping with multiple residual components requires "
-            "the model to declare `self.pts_pairing`: the residual key of "
-            'each neural_net output, in output order (e.g. ("ru", "rv", '
-            '"rc") for neural_net returning (u, v, p))'
+        assert len(sols) == len(keys), (
+            f"neural_net returned {len(sols)} solution components but r_net "
+            f"declared {len(keys)} residuals {keys}; pseudo-time requires "
+            "one residual per solution component, declared in the same order"
         )
-        assert set(pairing) == set(keys), (
-            f"pts_pairing {pairing} does not match residual keys {keys}"
-        )
-        by_key = dict(zip(pairing, sols))
-        return jnp.stack([by_key[key] for key in keys])
+        return jnp.stack(sols)
 
     def compute_pts_weights(self, state, init_state, batch):
         # Unpack all columns regardless of batch dimensionality (t,x) or (t,x,y) etc.

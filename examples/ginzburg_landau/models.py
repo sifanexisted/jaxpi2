@@ -10,8 +10,6 @@ from jaxpi.models import ForwardIVP
 class GinzburgLandau(ForwardIVP):
     def __init__(self, config, lr, tx, arch, state, t_max, eps, k):
         super().__init__(config, lr, tx, arch, state)
-        # Residual key of each neural_net output (u, v), for pseudo-time
-        self.pts_pairing = ("ru", "rv")
 
         self.t_max = t_max
 

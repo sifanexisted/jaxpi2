@@ -15,8 +15,6 @@ class NavierStokes2D(ForwardBVP):
                  wall_coords,
                  nu):
         super().__init__(config, lr, tx, arch, state)
-        # Residual key of each neural_net output (u, v, p), for pseudo-time
-        self.pts_pairing = ("ru", "rv", "rc")
         self.u_in = u_inflow  # inflow profile
         self.inflow_coords = inflow_coords
         self.outflow_coords = outflow_coords

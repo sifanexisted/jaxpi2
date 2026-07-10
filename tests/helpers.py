@@ -136,9 +136,6 @@ class TinyIVP(ForwardIVP):
 class TwoComponentIVP(ForwardIVP):
     """Two-residual model whose r_net dict keys are NOT in alphabetical order."""
 
-    # residual key of each neural_net output (u, v), for pseudo-time pairing
-    pts_pairing = ("rb", "ra")
-
     def neural_net(self, params, t, x):
         z = jnp.stack([t, x])
         out = self.state.apply_fn(params, z)

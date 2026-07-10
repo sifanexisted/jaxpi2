@@ -256,11 +256,12 @@ def test_update_pts_weights_matches_reference():
     np.testing.assert_allclose(np.asarray(got), np.asarray(expected), rtol=1e-4)
 
 
-def test_sols_matrix_pairs_by_name():
+def test_pseudo_time_pairs_residuals_with_their_solutions():
     """The pseudo-time damping must pair each residual with ITS solution
-    component. JAX sorts dict keys, so residual rows are alphabetical while
-    neural_net outputs are positional — regression test for the misalignment
-    that broke 3-component Navier-Stokes examples (rc paired with u)."""
+    component. JAX sorts dict keys when flattening pytrees (residual rows
+    would come back alphabetical while neural_net outputs are positional) —
+    regression test for the misalignment that broke the 3-component
+    Navier-Stokes examples (continuity residual damped toward u-velocity)."""
     import jax.numpy as jnp
 
     config = make_config(
@@ -272,27 +273,32 @@ def test_sols_matrix_pairs_by_name():
 
     model = make_model(config, model_cls=TwoComponentIVP)
 
-    # keys as _stack_residuals produces them (JAX-sorted): ["ra", "rb"]
-    keys = ["ra", "rb"]
-    u = jnp.ones(4) * 10.0   # first neural_net output -> paired with "rb"
-    v = jnp.ones(4) * 20.0   # second neural_net output -> paired with "ra"
+    # r_net declares {"rb": ..., "ra": ...}: declaration order must be
+    # recovered even though JAX would sort the keys to ["ra", "rb"]
+    assert model._res_key_order == ("rb", "ra")
 
+    batch = make_batch(jax.random.PRNGKey(0), n=8)
+    coords = tuple(batch[:, i] for i in range(batch.shape[1]))
+    keys, res = model._stack_residuals(
+        model.r_pred_fn(model.state.params, *coords), model.state
+    )
+    assert keys == ["rb", "ra"]
+    # rb is identically 0 and ra identically 3 -> rows must not be swapped
+    np.testing.assert_allclose(np.asarray(res[0]), 0.0, atol=1e-6)
+    np.testing.assert_allclose(np.asarray(res[1]), 3.0, atol=1e-6)
+
+    # positional pairing: first neural_net output (u) pairs with "rb"
+    u = jnp.ones(4) * 10.0
+    v = jnp.ones(4) * 20.0
     mat = model._sols_matrix((u, v), keys)
-    np.testing.assert_array_equal(np.asarray(mat[0]), np.asarray(v))  # ra -> v
-    np.testing.assert_array_equal(np.asarray(mat[1]), np.asarray(u))  # rb -> u
+    np.testing.assert_array_equal(np.asarray(mat[0]), np.asarray(u))  # rb -> u
+    np.testing.assert_array_equal(np.asarray(mat[1]), np.asarray(v))  # ra -> v
 
-    # dict-valued sols are also paired by name
-    mat = model._sols_matrix({"rb": u, "ra": v}, keys)
-    np.testing.assert_array_equal(np.asarray(mat[0]), np.asarray(v))
-    np.testing.assert_array_equal(np.asarray(mat[1]), np.asarray(u))
+    # dict-valued sols are paired by key
+    mat = model._sols_matrix({"ra": v, "rb": u}, keys)
+    np.testing.assert_array_equal(np.asarray(mat[0]), np.asarray(u))
+    np.testing.assert_array_equal(np.asarray(mat[1]), np.asarray(v))
 
-    # models without a declared pairing must fail loudly
-    model.pts_pairing = None
-    del model.pts_pairing  # remove instance attr; class attr may remain
-    if getattr(type(model), "pts_pairing", None) is not None:
-        import pytest
-
-        with pytest.MonkeyPatch.context() as mp:
-            mp.setattr(type(model), "pts_pairing", None)
-            with pytest.raises(AssertionError):
-                model._sols_matrix((u, v), keys)
+    # component-count mismatches fail loudly
+    with pytest.raises(AssertionError):
+        model._sols_matrix((u,), keys)

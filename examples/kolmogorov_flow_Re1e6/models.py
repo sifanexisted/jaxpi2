@@ -12,8 +12,6 @@ class NavierStokes2D(ForwardIVP):
 
         self.t_max = t_max
         self.nu = nu
-        # Residual key of each neural_net output (u, v, p), for pseudo-time
-        self.pts_pairing = ("ru", "rv", "rc")
 
         amplitude = config.problem.force_amplitude
         wavenumber = config.problem.force_wavenumber
