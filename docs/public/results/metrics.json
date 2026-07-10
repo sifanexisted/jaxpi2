@@ -1,0 +1,37 @@
+{
+  "allen_cahn": {
+    "l2_error": 4e-06
+  },
+  "bfs_flow": {
+    "l2_error": 0.270626
+  },
+  "burgers": {
+    "l2_error": 4e-05
+  },
+  "ginzburg_landau": {
+    "l2_error": 0.011194
+  },
+  "gray_scott": {
+    "l2_error": 0.000377
+  },
+  "inviscid_burgers": {
+    "l2_error": 0.126639
+  },
+  "kdv": {
+    "l2_error": 0.000152
+  },
+  "ks": {
+    "l2_error": 0.00432
+  },
+  "lid_driven_cavity": {
+    "l2_error": 0.042867
+  },
+  "sod_shock_tube": {
+    "p_error": 0.03431,
+    "rho_error": 0.104624,
+    "u_error": 0.202277
+  },
+  "wave": {
+    "l2_error": 1.2e-05
+  }
+}

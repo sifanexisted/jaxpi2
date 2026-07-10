@@ -23,11 +23,23 @@ REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT = os.path.join(REPO, "docs", "public", "results")
 CACHE = os.path.join(os.path.dirname(__file__), "cache")
 
-EXAMPLES = [
-    "advection", "allen_cahn", "burgers", "inviscid_burgers", "kdv", "ks",
-    "wave", "sod_shock_tube", "lid_driven_cavity", "gray_scott",
-    "ginzburg_landau", "kolmogorov_flow", "bfs_flow",
-]
+# example -> run whose convergence curve the example page shows (the
+# showcase run; defaults to the baseline when the baseline recipe wins)
+EXAMPLES = {
+    "advection": "advection__baseline",
+    "allen_cahn": "allen_cahn__baseline",
+    "burgers": "burgers__baseline",
+    "inviscid_burgers": "inviscid_burgers__pseudo_time",
+    "kdv": "kdv__pseudo_time",
+    "ks": "ks__pseudo_time",
+    "wave": "wave__baseline",
+    "sod_shock_tube": "sod_shock_tube__pseudo_time_v3",
+    "lid_driven_cavity": "lid_driven_cavity__pseudo_time_v2",
+    "gray_scott": "gray_scott__pt_windows4",
+    "ginzburg_landau": "ginzburg_landau__pseudo_time",
+    "kolmogorov_flow": "kolmogorov_flow__fixed_pt_windows4_v2",
+    "bfs_flow": "bfs_flow__fixed_pseudo_time_v3",
+}
 
 # study -> (title, error metric, [(run suffix, label)])
 ABLATIONS = {
@@ -54,17 +66,41 @@ ABLATIONS = {
     "pseudo_time_ginzburg_landau": (
         "Pseudo-time stepping — Ginzburg–Landau", "error/u",
         [("ginzburg_landau__baseline", "baseline"),
-         ("ginzburg_landau__pseudo_time", "pseudo-time")],
+         ("ginzburg_landau__pseudo_time", "adaptive pseudo-time")],
     ),
     "pseudo_time_inviscid_burgers": (
         "Pseudo-time stepping — inviscid Burgers", "error/l2",
         [("inviscid_burgers__baseline", "baseline"),
-         ("inviscid_burgers__pseudo_time", "pseudo-time")],
+         ("inviscid_burgers__pseudo_time", "adaptive pseudo-time"),
+         ("inviscid_burgers__fixed_pseudo_time", "fixed pseudo-time")],
     ),
     "pseudo_time_lid_driven_cavity": (
         "Pseudo-time stepping — lid-driven cavity (Re 5000)", "error/l2",
         [("lid_driven_cavity__baseline", "baseline"),
-         ("lid_driven_cavity__pseudo_time", "pseudo-time")],
+         ("lid_driven_cavity__pseudo_time_v2", "adaptive pseudo-time"),
+         ("lid_driven_cavity__fixed_pseudo_time_v2", "fixed pseudo-time")],
+    ),
+    "pseudo_time_sod_shock_tube": (
+        "Pseudo-time stepping — Sod shock tube", "error/p",
+        [("sod_shock_tube__baseline", "baseline"),
+         ("sod_shock_tube__pseudo_time_v2", "adaptive pseudo-time"),
+         ("sod_shock_tube__fixed_pseudo_time_v2", "fixed pseudo-time")],
+    ),
+    "pseudo_time_kolmogorov_flow": (
+        "Pseudo-time stepping — Kolmogorov flow", "error/w",
+        [("kolmogorov_flow__baseline", "baseline"),
+         ("kolmogorov_flow__pseudo_time_v2", "adaptive pseudo-time")],
+    ),
+    "pseudo_time_bfs_flow": (
+        "Pseudo-time stepping — backward-facing step", "error/u",
+        [("bfs_flow__baseline", "baseline"),
+         ("bfs_flow__pseudo_time_v2", "adaptive pseudo-time"),
+         ("bfs_flow__fixed_pseudo_time_v3", "fixed pseudo-time")],
+    ),
+    "pseudo_time_ks": (
+        "Pseudo-time stepping — Kuramoto–Sivashinsky", "error/l2",
+        [("ks__baseline", "baseline"),
+         ("ks__pseudo_time", "adaptive pseudo-time")],
     ),
     "arch_burgers": (
         "Architecture — Burgers (parameter-matched, 724k)", "error/l2",
@@ -220,7 +256,7 @@ def main():
     api = wandb.Api()
     os.makedirs(OUT, exist_ok=True)
 
-    only = args.only.split(",") if args.only else EXAMPLES
+    only = args.only.split(",") if args.only else list(EXAMPLES)
 
     histories = {}
 
@@ -232,7 +268,7 @@ def main():
 
     print("convergence curves")
     for name in only:
-        rows = get(f"{name}__baseline")
+        rows = get(EXAMPLES.get(name, f"{name}__baseline"))
         if not rows:
             print(f"  {name}: run not found, skipped")
             continue

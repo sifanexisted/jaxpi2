@@ -8,27 +8,57 @@ $$
 \frac{\partial v}{\partial t} = \varepsilon_2 \nabla^2 v - b_2 v + c_2 u v^2 .
 $$
 
+The patterns grow from a localized seed on top of an unstable homogeneous equilibrium —
+exactly the setting where PINNs are prone to spurious steady solutions.
+
+## Results
+
+<div class="result-glance">
+  <span>relative L2 error <strong>3.8e-04</strong></span>
+  <span>recipe <strong>4 time windows + adaptive pseudo-time</strong></span>
+  <span>4 × 100k steps, single GPU</span>
+</div>
+
+This is the suite's most dramatic rescue. Trained naively over the whole time range, the
+network converges to the spurious homogeneous state and never grows the pattern — a
+relative L2 error of **0.90** despite a small training loss. Splitting the horizon into
+four [time windows](/guide/training-techniques#time-window-curriculum) and enabling
+[adaptive pseudo-time stepping](/methods/pseudo-time) recovers the full pattern-formation
+dynamics at **3.8e-04** over the stitched trajectory — a ~2000× improvement, with every
+window converging below 1e-03. Pseudo-time alone (no windows) already recovers to 0.03,
+confirming the spurious-equilibrium diagnosis; the windowed curriculum then removes the
+remaining long-horizon error.
+
 <figure class="example-figure">
-  <video src="/jaxpi2/gallery/gray_scott.mp4" autoplay loop muted playsinline></video>
-  <figcaption>Reference v-field: pattern growth from a localized seed.</figcaption>
+  <video src="/jaxpi2/results/gray_scott_pred.mp4" autoplay loop muted playsinline></video>
+  <figcaption>Reference, PINN prediction, and absolute error of the v-field: pattern growth from a localized seed.</figcaption>
+</figure>
+
+<figure class="example-figure">
+
+![Gray-Scott convergence](/jaxpi2/results/gray_scott_convergence.png)
+
+<figcaption>Training losses and per-variable errors across all four windows (the sawtooth
+marks each window's warm restart).</figcaption>
 </figure>
 
 ## Run
 
 ```bash
 cd examples/gray_scott
-python3 main.py --config=configs/baseline.py
+python3 main.py --config=configs/pseudo_time.py \
+    --config.training.num_time_windows=4
 ```
 
 | Config | Description |
 | --- | --- |
 | `configs/baseline.py` | PirateNet + causal weighting |
-| `configs/pseudo_time.py` | Adaptive pseudo-time stepping |
+| `configs/pseudo_time.py` | Adaptive pseudo-time stepping (showcase, with 4 windows) |
 | `configs/fixed_pseudo_time.py` | Constant pseudo-time weights |
 
 ## Notes
 
-- The patterns emerge from an unstable equilibrium — exactly the setting where PINNs are
-  prone to spurious steady solutions, making this a key benchmark for pseudo-time stepping.
+- A key benchmark for [pseudo-time stepping](/methods/pseudo-time): the unstable homogeneous
+  equilibrium is a perfect residual minimizer that plain training happily finds.
 - Supports a fixed residual batch (`--config.training.random_sampling=False`) for
   controlled pseudo-time experiments.
