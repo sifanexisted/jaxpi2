@@ -265,21 +265,60 @@ class PINN:
         """Pseudo-time weights as a vector in residual-component order."""
         return jnp.array([state.pts_weights[key] for key in keys])
 
+    def _sols_matrix(self, sols, keys):
+        """Solution components as a (n_components, N) matrix aligned with the
+        residual-component order `keys`.
+
+        JAX sorts dict keys when flattening pytrees, so the rows of the
+        stacked residuals follow the ALPHABETICAL order of the r_net keys —
+        which generally differs from the tuple order of neural_net outputs
+        (e.g. residuals (rc, ru, rv) vs solutions (u, v, p)). Pairing those
+        positionally silently damps each residual toward the WRONG solution
+        component. Multi-component models must therefore declare
+
+            self.pts_pairing = ("ru", "rv", "rc")   # residual key of each
+                                                    # neural_net output, in
+                                                    # output order
+
+        so that the damping term and the adaptive weight estimate pair
+        residuals and solutions by name.
+        """
+        if isinstance(sols, dict):
+            assert set(sols.keys()) == set(keys), (
+                f"sol components {list(sols.keys())} do not match residual "
+                f"keys {keys}"
+            )
+            return jnp.stack([sols[key] for key in keys])
+
+        if not isinstance(sols, (tuple, list)):
+            sols = (sols,)
+        if len(sols) == 1 and len(keys) == 1:
+            return jnp.stack(sols)
+
+        pairing = getattr(self, "pts_pairing", None)
+        assert pairing is not None, (
+            "Pseudo-time stepping with multiple residual components requires "
+            "the model to declare `self.pts_pairing`: the residual key of "
+            'each neural_net output, in output order (e.g. ("ru", "rv", '
+            '"rc") for neural_net returning (u, v, p))'
+        )
+        assert set(pairing) == set(keys), (
+            f"pts_pairing {pairing} does not match residual keys {keys}"
+        )
+        by_key = dict(zip(pairing, sols))
+        return jnp.stack([by_key[key] for key in keys])
+
     def compute_pts_weights(self, state, init_state, batch):
         # Unpack all columns regardless of batch dimensionality (t,x) or (t,x,y) etc.
         coords = tuple(batch[:, i] for i in range(batch.shape[1]))
-
-        # Stack predictions and residuals: shape (n_components, N)
-        sols_pred = jnp.stack(self.sol_pred_fn(state.params, *coords))
-        sols_prev = jnp.stack(self.sol_pred_fn(state.prev_params, *coords))
 
         keys, res_pred = self._stack_residuals(self.r_pred_fn(state.params, *coords), state)
         _, res_prev = self._stack_residuals(self.r_pred_fn(state.prev_params, *coords), state)
         _, res0_pred = self._stack_residuals(self.r_pred_fn(init_state.params, *coords), state)
 
-        if sols_pred.ndim == 1:
-            sols_pred = sols_pred[None, :]  # (n_components, N)
-            sols_prev = sols_prev[None, :]  # (n_components, N)
+        # Solution components aligned with the residual rows BY NAME
+        sols_pred = self._sols_matrix(self.sol_pred_fn(state.params, *coords), keys)
+        sols_prev = self._sols_matrix(self.sol_pred_fn(state.prev_params, *coords), keys)
 
         # Reductions must be global when the batch is sharded across devices,
         # so that all devices agree on the resulting weights.
@@ -541,8 +580,8 @@ class ForwardIVP(PINN):
         keys, res = self._stack_residuals(self.r_pred_fn(params, *coords), state)
 
         if pseudo_time:
-            sols_pred = jnp.stack(self.sol_pred_fn(params, *coords))
-            sols_prev = jnp.stack(self.sol_pred_fn(state.prev_params, *coords))
+            sols_pred = self._sols_matrix(self.sol_pred_fn(params, *coords), keys)
+            sols_prev = self._sols_matrix(self.sol_pred_fn(state.prev_params, *coords), keys)
             pts_weights = self._pts_weight_vector(keys, state)  # (n_components,)
             res = res + pts_weights[:, None] * (sols_pred - sols_prev)
         return res
@@ -613,8 +652,8 @@ class ForwardIVP(PINN):
         keys, res_pred = self._stack_residuals(self.r_pred_fn(params, *coords), state)
 
         if pseudo_time:
-            sols_pred = jnp.stack(self.sol_pred_fn(params, *coords))
-            sols_prev = jnp.stack(self.sol_pred_fn(state.prev_params, *coords))
+            sols_pred = self._sols_matrix(self.sol_pred_fn(params, *coords), keys)
+            sols_prev = self._sols_matrix(self.sol_pred_fn(state.prev_params, *coords), keys)
             pts_weights = self._pts_weight_vector(keys, state)  # (n_components,)
             res_pred = res_pred + pts_weights[:, None] * (sols_pred - sols_prev)
 
@@ -636,8 +675,8 @@ class ForwardBVP(PINN):
         keys, res_pred = self._stack_residuals(self.r_pred_fn(params, *coords), state)
 
         if pseudo_time:
-            sols_pred = jnp.stack(self.sol_pred_fn(params, *coords))
-            sols_prev = jnp.stack(self.sol_pred_fn(state.prev_params, *coords))
+            sols_pred = self._sols_matrix(self.sol_pred_fn(params, *coords), keys)
+            sols_prev = self._sols_matrix(self.sol_pred_fn(state.prev_params, *coords), keys)
             pts_weights = self._pts_weight_vector(keys, state)  # (n_components,)
             res_pred = res_pred + pts_weights[:, None] * (sols_pred - sols_prev)
 

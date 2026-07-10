@@ -30,6 +30,22 @@ REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT = os.path.join(REPO, "docs", "public", "results")
 DEFAULT_CKPT_ROOT = "/data/sifanw/pinns/site"
 
+# Which W&B/checkpoint run supplies each example's showcase figure;
+# overridable with --runs (defaults to <example>__baseline).
+RUN_OVERRIDES = {}
+
+# Number of time windows the showcase run was trained with (overridable with
+# --windows); windowed examples default to their config value.
+WINDOW_OVERRIDES = {}
+
+
+def run_for(name):
+    return RUN_OVERRIDES.get(name, f"{name}__baseline")
+
+
+def windows_for(name, config):
+    return int(WINDOW_OVERRIDES.get(name, config.training.num_time_windows))
+
 sys.path.insert(0, REPO)
 
 import jax.numpy as jnp
@@ -64,12 +80,15 @@ def load_config(name, config_file="baseline"):
         return module.get_config()
 
 
-def restore(config, model, ckpt_root, run_name, windowed=False):
+def restore(config, model, ckpt_root, run_name, windowed=False, window=1):
     path = os.path.join(ckpt_root, run_name, "ckpt")
-    suffix = "time_window_1" if windowed else None
+    suffix = f"time_window_{window}" if windowed else None
     mngr = create_checkpoint_manager(config.saving, path, suffix=suffix)
     model.state = restore_checkpoint(mngr, model.state)
-    return get_eval_params(model.state, config.optim.schedule_free)
+    # Use the raw training iterates, matching what the example evaluators log
+    # during training (empirically better than the schedule-free averages at
+    # the end of these runs, where the LR has fully decayed).
+    return model.state.params
 
 
 def rel_l2(pred, ref):
@@ -78,16 +97,57 @@ def rel_l2(pred, ref):
 
 
 # ---------------------------------------------------------------------------
-# figure helpers
+# unified figure style (shared by every static figure and animation)
 # ---------------------------------------------------------------------------
 
+INK = "#1e293b"       # slate-800, matches the site's text color
+MUTED = "#64748b"     # slate-500
+BRAND = "#4f46e5"     # site brand indigo
+ERR_CMAP = "magma"    # error panel colormap, unified across examples
+
+FONT_DIR = "/root/code/sifanw/site_experiments/fonts/inter_extract/extras/ttf"
+
+
+def _register_fonts():
+    """Use Inter (the docs site font) when available, DejaVu otherwise."""
+    from matplotlib import font_manager
+
+    if os.path.isdir(FONT_DIR):
+        for fname in ("Inter-Regular.ttf", "Inter-Medium.ttf", "Inter-SemiBold.ttf"):
+            path = os.path.join(FONT_DIR, fname)
+            if os.path.exists(path):
+                font_manager.fontManager.addfont(path)
+        if any("Inter" == f.name for f in font_manager.fontManager.ttflist):
+            return "Inter"
+    return "DejaVu Sans"
+
+
 plt.rcParams.update({
+    "font.family": _register_fonts(),
     "figure.facecolor": "white",
-    "axes.titlesize": 11,
-    "axes.labelsize": 9,
+    "axes.facecolor": "white",
+    "text.color": INK,
+    "axes.edgecolor": "#e2e8f0",
+    "axes.linewidth": 0.8,
+    "axes.titlesize": 12,
+    "axes.titleweight": "medium",
+    "axes.titlecolor": INK,
+    "axes.titlepad": 8,
+    "axes.labelsize": 9.5,
+    "axes.labelcolor": MUTED,
     "xtick.labelsize": 8,
     "ytick.labelsize": 8,
+    "xtick.color": MUTED,
+    "ytick.color": MUTED,
+    "figure.dpi": 150,
 })
+
+PANEL_TITLES = ("Reference", "PINN prediction", "Absolute error")
+
+
+def _style_colorbar(cbar):
+    cbar.outline.set_visible(False)
+    cbar.ax.tick_params(labelsize=7.5, color=MUTED, width=0.8, length=3)
 
 
 def panels_1d(name, u_ref, u_pred, t, x, cmap, xlabel="t", ylabel="x"):
@@ -97,45 +157,100 @@ def panels_1d(name, u_ref, u_pred, t, x, cmap, xlabel="t", ylabel="x"):
     vmax = np.percentile(np.abs(u_ref), 99.9)
     extent = [float(t[0]), float(t[-1]), float(x[0]), float(x[-1])]
 
-    fig, axes = plt.subplots(1, 3, figsize=(11.5, 3.2), dpi=150, constrained_layout=True)
-    for ax, field, title, kw in [
-        (axes[0], u_ref, "Reference", {"vmin": -vmax, "vmax": vmax, "cmap": cmap}),
-        (axes[1], u_pred, "PINN prediction", {"vmin": -vmax, "vmax": vmax, "cmap": cmap}),
-        (axes[2], err, "Absolute error", {"cmap": "magma"}),
-    ]:
+    fig, axes = plt.subplots(1, 3, figsize=(11.5, 3.2), constrained_layout=True)
+    fields = (u_ref, u_pred, err)
+    kws = (
+        {"vmin": -vmax, "vmax": vmax, "cmap": cmap},
+        {"vmin": -vmax, "vmax": vmax, "cmap": cmap},
+        {"cmap": ERR_CMAP},
+    )
+    for ax, field, title, kw in zip(axes, fields, PANEL_TITLES, kws):
         im = ax.imshow(field.T, origin="lower", aspect="auto", extent=extent, **kw)
         ax.set_title(title)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
-        fig.colorbar(im, ax=ax, shrink=0.85)
+        _style_colorbar(fig.colorbar(im, ax=ax, shrink=0.85))
     _save(fig, name)
+
+
+def _panel_limits(ref, vsym):
+    if vsym:
+        vmax = np.percentile(np.abs(ref), 99.9)
+        return {"vmin": -vmax, "vmax": vmax}
+    return {"vmin": float(np.percentile(ref, 0.1)),
+            "vmax": float(np.percentile(ref, 99.9))}
 
 
 def panels_2d(name, ref, pred, cmap, vsym=True, labels=("x", "y")):
     """2D snapshot panels: reference / prediction / abs error."""
     ref, pred = np.asarray(ref), np.asarray(pred)
     err = np.abs(pred - ref)
-    kw = {"cmap": cmap}
-    if vsym:
-        vmax = np.percentile(np.abs(ref), 99.9)
-        kw.update(vmin=-vmax, vmax=vmax)
-    else:
-        kw.update(vmin=np.percentile(ref, 0.1), vmax=np.percentile(ref, 99.9))
+    kw = {"cmap": cmap, **_panel_limits(ref, vsym)}
 
-    fig, axes = plt.subplots(1, 3, figsize=(11.5, 3.6), dpi=150, constrained_layout=True)
-    for ax, field, title, k in [
-        (axes[0], ref, "Reference", kw),
-        (axes[1], pred, "PINN prediction", kw),
-        (axes[2], err, "Absolute error", {"cmap": "magma"}),
-    ]:
+    fig, axes = plt.subplots(1, 3, figsize=(11.5, 3.6), constrained_layout=True)
+    fields = (ref, pred, err)
+    kws = (kw, kw, {"cmap": ERR_CMAP})
+    for ax, field, title, k in zip(axes, fields, PANEL_TITLES, kws):
         im = ax.imshow(field.T, origin="lower", aspect="equal", **k)
         ax.set_title(title)
         ax.set_xlabel(labels[0])
         ax.set_ylabel(labels[1])
         ax.set_xticks([])
         ax.set_yticks([])
-        fig.colorbar(im, ax=ax, shrink=0.85)
+        _style_colorbar(fig.colorbar(im, ax=ax, shrink=0.85))
     _save(fig, name)
+
+
+def animate_2d(name, ref, pred, t_star, cmap, vsym=True, fps=10, max_frames=100):
+    """Animated reference / prediction / error panels for 2D time-dependent
+    problems: (T, nx, ny) arrays -> docs/public/results/<name>_pred.mp4."""
+    import imageio.v2 as imageio
+
+    ref, pred = np.asarray(ref), np.asarray(pred)
+    stride = max(1, len(ref) // max_frames)
+    ref_s, pred_s, t_s = ref[::stride], pred[::stride], np.asarray(t_star)[::stride]
+    err_s = np.abs(pred_s - ref_s)
+
+    kw = {"cmap": cmap, **_panel_limits(ref, vsym)}
+    err_kw = {"cmap": ERR_CMAP, "vmin": 0.0,
+              "vmax": float(np.percentile(err_s, 99.5))}
+
+    fig, axes = plt.subplots(1, 3, figsize=(11.5, 3.7), constrained_layout=True)
+    images = []
+    for ax, field, title, k in zip(
+        axes, (ref_s[0], pred_s[0], err_s[0]), PANEL_TITLES, (kw, kw, err_kw)
+    ):
+        images.append(ax.imshow(field.T, origin="lower", aspect="equal", **k))
+        ax.set_title(title)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        _style_colorbar(fig.colorbar(images[-1], ax=ax, shrink=0.85))
+    # time badge inside the reference panel (readable on any colormap)
+    time_text = axes[0].text(
+        0.04, 0.955, "", transform=axes[0].transAxes, ha="left", va="top",
+        fontsize=9, color=INK, weight="medium",
+        bbox=dict(boxstyle="round,pad=0.35", facecolor="white",
+                  alpha=0.85, edgecolor="none"),
+    )
+
+    os.makedirs(OUT, exist_ok=True)
+    path = os.path.join(OUT, f"{name}_pred.mp4")
+    writer = imageio.get_writer(
+        path, fps=fps, codec="libx264", quality=8,
+        ffmpeg_params=["-pix_fmt", "yuv420p"],
+    )
+    fig.canvas.draw()
+    for i in range(len(ref_s)):
+        for im, field in zip(images, (ref_s[i], pred_s[i], err_s[i])):
+            im.set_data(field.T)
+        time_text.set_text(f"t = {float(t_s[i]):.3f}")
+        fig.canvas.draw()
+        frame = np.asarray(fig.canvas.buffer_rgba())[..., :3]
+        frame = frame[: frame.shape[0] // 2 * 2, : frame.shape[1] // 2 * 2]
+        writer.append_data(frame)
+    writer.close()
+    plt.close(fig)
+    print(f"  {os.path.relpath(path, REPO)} ({os.path.getsize(path) // 1024} KB)")
 
 
 def _save(fig, name):
@@ -173,7 +288,7 @@ def predict_snapshots(fn, params, t_star, coords):
 def gen_simple_1d(name, model_cls_name, cmap, run=None, config_file="baseline",
                   model_kwargs=None, ckpt_root=DEFAULT_CKPT_ROOT):
     """Examples following the (u0, t_star, x_star) pattern."""
-    run = run or f"{name}__baseline"
+    run = run or run_for(name)
     config = load_config(name, config_file)
     with example(name):
         import models
@@ -219,7 +334,7 @@ def gen_wave(ckpt_root):
 
 
 def gen_ks(ckpt_root):
-    name, run = "ks", "ks__baseline"
+    name, run = "ks", run_for("ks")
     config = load_config(name)
     with example(name):
         import models
@@ -240,7 +355,7 @@ def gen_ks(ckpt_root):
 
 
 def gen_sod_shock_tube(ckpt_root):
-    name, run = "sod_shock_tube", "sod_shock_tube__baseline"
+    name, run = "sod_shock_tube", run_for("sod_shock_tube")
     config = load_config(name)
     with example(name):
         import models
@@ -272,7 +387,7 @@ def gen_sod_shock_tube(ckpt_root):
 
 
 def gen_lid_driven_cavity(ckpt_root):
-    name, run = "lid_driven_cavity", "lid_driven_cavity__baseline"
+    name, run = "lid_driven_cavity", run_for("lid_driven_cavity")
     config = load_config(name)
     with example(name):
         import models
@@ -312,7 +427,7 @@ def gen_ginzburg_landau(ckpt_root):
 def _gen_reaction_diffusion(name, cls_name, param_names, cmap, vsym, field_idx,
                             ckpt_root):
     """gray_scott / ginzburg_landau: (u, v) systems on a 2D periodic grid."""
-    run = f"{name}__baseline"
+    run = run_for(name)
     config = load_config(name)
     with example(name):
         import models
@@ -322,8 +437,9 @@ def _gen_reaction_diffusion(name, cls_name, param_names, cmap, vsym, field_idx,
         u_ref, v_ref, t_ref, x_star, y_star = data[:5]
         pde_params = dict(zip(param_names, data[5:]))
 
-        num_time_steps = len(t_ref) // config.training.num_time_windows
-        t_star = t_ref[:num_time_steps]
+        windows = windows_for(name, config)
+        num_time_steps = len(t_ref) // windows
+        t_star = t_ref[:num_time_steps]  # every window trains on this local grid
         dt = t_star[1] - t_star[0]
         t1 = t_star[-1] + 1.1 * dt
 
@@ -332,19 +448,24 @@ def _gen_reaction_diffusion(name, cls_name, param_names, cmap, vsym, field_idx,
         coords = jnp.stack([XX.ravel(), YY.ravel()], axis=1)
 
         model = create_model(config, getattr(models, cls_name), t_max=t1, **pde_params)
-        params = restore(config, model, ckpt_root, run, windowed=True)
-
         fn = [model.u_pred_fn, model.v_pred_fn][field_idx]
-        preds = predict_snapshots(fn, params, t_star, coords).reshape(-1, nx, ny)
 
-    ref = np.asarray([u_ref, v_ref][field_idx])[:num_time_steps]
+        # Stitch predictions from each window's checkpoint
+        preds = []
+        for k in range(windows):
+            params = restore(config, model, ckpt_root, run, windowed=True, window=k + 1)
+            preds.append(predict_snapshots(fn, params, t_star, coords))
+        preds = np.concatenate(preds).reshape(-1, nx, ny)
+
+    ref = np.asarray([u_ref, v_ref][field_idx])[: windows * num_time_steps]
     error = rel_l2(preds, ref)
     panels_2d(name, ref[-1], preds[-1], cmap, vsym=vsym)
+    animate_2d(name, ref, preds, t_ref[: windows * num_time_steps], cmap, vsym=vsym)
     return {"l2_error": error}
 
 
 def gen_kolmogorov_flow(ckpt_root):
-    name, run = "kolmogorov_flow", "kolmogorov_flow__baseline"
+    name, run = "kolmogorov_flow", run_for("kolmogorov_flow")
     config = load_config(name)
     with example(name):
         import models
@@ -352,27 +473,35 @@ def gen_kolmogorov_flow(ckpt_root):
 
         u_ref, v_ref, w_ref, t_ref, coords, nu = utils.get_dataset(
             time_range=config.time_range)
-        num_time_steps = len(t_ref) // config.training.num_time_windows
+        windows = windows_for(name, config)
+        num_time_steps = len(t_ref) // windows
         t_star = t_ref[:num_time_steps]
         dt = t_star[1] - t_star[0]
         t1 = t_star[-1] + 1.1 * dt
 
         model = create_model(config, models.NavierStokes2D, t_max=t1, nu=nu)
-        params = restore(config, model, ckpt_root, run, windowed=True)
 
-        w_pred = predict_snapshots(
-            model.w_pred_fn, params, t_star, jnp.asarray(coords)
-        )
+        w_pred = []
+        for k in range(windows):
+            params = restore(config, model, ckpt_root, run, windowed=True, window=k + 1)
+            w_pred.append(
+                predict_snapshots(model.w_pred_fn, params, t_star, jnp.asarray(coords))
+            )
+        w_pred = np.concatenate(w_pred)
 
     n = int(round(np.sqrt(w_ref.shape[1])))
-    w_ref = np.asarray(w_ref)[:num_time_steps]
+    w_ref = np.asarray(w_ref)[: windows * num_time_steps]
     error = rel_l2(w_pred, w_ref)
     panels_2d(name, w_ref[-1].reshape(n, n), w_pred[-1].reshape(n, n), "RdBu_r")
+    animate_2d(
+        name, w_ref.reshape(-1, n, n), w_pred.reshape(-1, n, n),
+        t_ref[: windows * num_time_steps], "RdBu_r",
+    )
     return {"w_error": error}
 
 
 def gen_bfs_flow(ckpt_root):
-    name, run = "bfs_flow", "bfs_flow__baseline"
+    name, run = "bfs_flow", run_for("bfs_flow")
     config = load_config(name)
     with example(name):
         import models
@@ -433,7 +562,23 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt-root", default=DEFAULT_CKPT_ROOT)
     parser.add_argument("--only", default=None, help="comma-separated example names")
+    parser.add_argument(
+        "--runs", default=None,
+        help="per-example run overrides, e.g. gray_scott=gray_scott__pseudo_time,"
+             "ks=ks__baseline (default: <example>__baseline)",
+    )
+    parser.add_argument(
+        "--windows", default=None,
+        help="per-example time-window count of the chosen run, e.g. "
+             "gray_scott=4,kolmogorov_flow=4",
+    )
     args = parser.parse_args()
+
+    global RUN_OVERRIDES, WINDOW_OVERRIDES
+    if args.runs:
+        RUN_OVERRIDES = dict(pair.split("=") for pair in args.runs.split(","))
+    if args.windows:
+        WINDOW_OVERRIDES = dict(pair.split("=") for pair in args.windows.split(","))
 
     only = args.only.split(",") if args.only else list(GENERATORS)
     os.makedirs(OUT, exist_ok=True)

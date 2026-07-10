@@ -29,6 +29,9 @@ from helpers import make_batch, make_config, make_model
 class StressIVP(ForwardIVP):
     """Two-component IVP with ICs flowing through the (sharded) batch."""
 
+    # residual key of each neural_net output (u, v): rb is u's residual
+    pts_pairing = ("rb", "ra")
+
     def neural_net(self, params, t, x):
         z = jnp.stack([t, x])
         out = self.state.apply_fn(params, z)

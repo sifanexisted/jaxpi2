@@ -41,6 +41,16 @@ ABLATIONS = {
         [("ks__baseline", "causal on (baseline)"),
          ("ks__no_causal", "causal off")],
     ),
+    "causal_ks_pt": (
+        "Causal weighting — KS, long window with pseudo-time", "error/l2",
+        [("ks__pseudo_time", "causal on"),
+         ("ks__pt_no_causal", "causal off")],
+    ),
+    "causal_gray_scott_windows": (
+        "Causal weighting — Gray–Scott, 4 windows + pseudo-time", "error/v",
+        [("gray_scott__pt_windows4", "causal on"),
+         ("gray_scott__pt_windows4_no_causal", "causal off")],
+    ),
     "pseudo_time_ginzburg_landau": (
         "Pseudo-time stepping — Ginzburg–Landau", "error/u",
         [("ginzburg_landau__baseline", "baseline"),
@@ -61,6 +71,12 @@ ABLATIONS = {
         [("burgers__baseline", "PirateNet (3 blocks)"),
          ("burgers__modified_mlp", "ModifiedMlp (9 layers)"),
          ("burgers__mlp", "Mlp (11 layers)")],
+    ),
+    "arch_ks": (
+        "Architecture — Kuramoto–Sivashinsky (parameter-matched, 724k)", "error/l2",
+        [("ks__baseline", "PirateNet (3 blocks)"),
+         ("ks__modified_mlp", "ModifiedMlp (9 layers)"),
+         ("ks__mlp", "Mlp (11 layers)")],
     ),
     "optimizer_lid_driven_cavity": (
         "Optimizer — lid-driven cavity (Re 5000)", "error/l2",

@@ -38,7 +38,7 @@ def train_and_evaluate(config):
     # Problem setup
     T = 2.0  # final time
     L = 2 * jnp.pi  # length of the domain
-    c = 50  # advection speed
+    c = config.problem.c  # advection speed
     n_t = 200  # number of time steps
     n_x = 128  # number of spatial points
 

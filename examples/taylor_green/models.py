@@ -12,6 +12,8 @@ class NavierStokes3D(ForwardIVP):
 
         self.t_max = t_max
         self.nu = nu
+        # Residual key of each neural_net output (u, v, w, p), for pseudo-time
+        self.pts_pairing = ("ru", "rv", "rw", "rc")
 
         # vmap functions over a spatial grid at a fixed time
         self.uvwp0_pred_fn = vmap(self.solution_net, (None, None, 0, 0, 0))

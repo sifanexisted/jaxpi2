@@ -12,6 +12,8 @@ from jaxpi.models import ForwardIVP
 class Euler1D(ForwardIVP):
     def __init__(self, config, lr, tx, arch, state, rho0, u0, p0, t_star, x_star, left_coords, right_coords):
         super().__init__(config, lr, tx, arch, state)
+        # Residual key of each neural_net output (rho, u, p), for pseudo-time
+        self.pts_pairing = ("rc", "ru", "rE")
 
         self.rho0 = jnp.array(rho0)
         self.u0 = jnp.array(u0)

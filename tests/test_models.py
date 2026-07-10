@@ -254,3 +254,45 @@ def test_update_pts_weights_matches_reference():
 
     assert np.isfinite(got) and got > 0
     np.testing.assert_allclose(np.asarray(got), np.asarray(expected), rtol=1e-4)
+
+
+def test_sols_matrix_pairs_by_name():
+    """The pseudo-time damping must pair each residual with ITS solution
+    component. JAX sorts dict keys, so residual rows are alphabetical while
+    neural_net outputs are positional — regression test for the misalignment
+    that broke 3-component Navier-Stokes examples (rc paired with u)."""
+    import jax.numpy as jnp
+
+    config = make_config(
+        out_dim=2,
+        loss_weights={"res": 1.0},
+        pts_weights={"rb": 1.0, "ra": 1.0},
+    )
+    from helpers import TwoComponentIVP
+
+    model = make_model(config, model_cls=TwoComponentIVP)
+
+    # keys as _stack_residuals produces them (JAX-sorted): ["ra", "rb"]
+    keys = ["ra", "rb"]
+    u = jnp.ones(4) * 10.0   # first neural_net output -> paired with "rb"
+    v = jnp.ones(4) * 20.0   # second neural_net output -> paired with "ra"
+
+    mat = model._sols_matrix((u, v), keys)
+    np.testing.assert_array_equal(np.asarray(mat[0]), np.asarray(v))  # ra -> v
+    np.testing.assert_array_equal(np.asarray(mat[1]), np.asarray(u))  # rb -> u
+
+    # dict-valued sols are also paired by name
+    mat = model._sols_matrix({"rb": u, "ra": v}, keys)
+    np.testing.assert_array_equal(np.asarray(mat[0]), np.asarray(v))
+    np.testing.assert_array_equal(np.asarray(mat[1]), np.asarray(u))
+
+    # models without a declared pairing must fail loudly
+    model.pts_pairing = None
+    del model.pts_pairing  # remove instance attr; class attr may remain
+    if getattr(type(model), "pts_pairing", None) is not None:
+        import pytest
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(type(model), "pts_pairing", None)
+            with pytest.raises(AssertionError):
+                model._sols_matrix((u, v), keys)

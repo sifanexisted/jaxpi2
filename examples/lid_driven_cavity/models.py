@@ -13,6 +13,8 @@ class NavierStokes2D(ForwardBVP):
     def __init__(self, config, lr, tx, arch, state, nu):
         super().__init__(config, lr, tx, arch, state)
         self.nu = nu
+        # Residual key of each neural_net output (u, v, p), for pseudo-time
+        self.pts_pairing = ("ru", "rv", "rc")
 
         # Sample boundary points uniformly
         num_pts = 128

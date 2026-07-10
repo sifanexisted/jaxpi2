@@ -11,6 +11,10 @@ def get_base_config():
     wandb.name = "baseline"
     wandb.tag = None
 
+    # Problem setup
+    config.problem = problem = ml_collections.ConfigDict()
+    problem.c = 50.0  # advection speed
+
     # Arch
     config.arch = arch = ml_collections.ConfigDict()
     arch.arch_name = "Piratenet"
