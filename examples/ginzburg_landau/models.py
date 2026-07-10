@@ -20,10 +20,9 @@ class GinzburgLandau(ForwardIVP):
         self.u_pred_fn = vmap(vmap(self.u_net, (None, None, 0, 0)), (None, 0, None, None))
         self.v_pred_fn = vmap(vmap(self.v_net, (None, None, 0, 0)), (None, 0, None, None))
 
-    def sol_net(self, params, t, x, y):
-        # Solution component damped by each residual (paired by key)
-        u, v = self.neural_net(params, t, x, y)
-        return {"ru": u, "rv": v}
+    # Names of neural_net's outputs; residuals are keyed by the variable
+    # they evolve in pseudo-time
+    variables = ("u", "v")
 
     def neural_net(self, params, t, x, y):
         t = t / self.t_max
@@ -62,7 +61,7 @@ class GinzburgLandau(ForwardIVP):
         ru = u_t - self.eps * u_laplace - self.k * (u - u * (u ** 2 + v ** 2) + 1.5 * v * (u ** 2 + v ** 2))
         rv = v_t - self.eps * v_laplace - self.k * (v - v * (u ** 2 + v ** 2) - 1.5 * u * (u ** 2 + v ** 2))
 
-        return {"ru": ru, "rv": rv}
+        return {"u": ru, "v": rv}
 
     @partial(jit, static_argnums=(0,))
     def losses(self, params, state, batch):

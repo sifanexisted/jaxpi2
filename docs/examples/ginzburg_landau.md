@@ -35,4 +35,4 @@ python3 main.py --config=configs/baseline.py
 
 - Time-window training with `MeshSampler` initial conditions: the IC data flows through the
   batch, so each window simply resamples from the propagated field.
-- The two residuals are returned as `{"ru", "rv"}` for per-component adaptive weighting.
+- The two residuals are keyed by their variables (`{"u", "v"}`) for per-component adaptive weighting.

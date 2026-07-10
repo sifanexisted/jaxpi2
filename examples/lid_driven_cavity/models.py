@@ -30,10 +30,9 @@ class NavierStokes2D(ForwardBVP):
         self.v_pred_fn = vmap(self.v_net, (None, 0, 0))
         self.p_pred_fn = vmap(self.p_net, (None, 0, 0))
 
-    def sol_net(self, params, x, y):
-        # Solution component damped by each residual (paired by key)
-        u, v, p = self.neural_net(params, x, y)
-        return {"ru": u, "rv": v, "rc": p}
+    # Names of neural_net's outputs; residuals are keyed by the variable
+    # they evolve in pseudo-time
+    variables = ("u", "v", "p")
 
     def neural_net(self, params, x, y):
         z = jnp.stack([x, y])
@@ -73,7 +72,7 @@ class NavierStokes2D(ForwardBVP):
         rv = u * v_x + v * v_y + p_y - self.nu * (v_xx + v_yy)
         rc = u_x + v_y
 
-        return {"ru": ru, "rv": rv, "rc": rc}
+        return {"u": ru, "v": rv, "p": rc}
 
     def diffusion_net(self, params, x, y):
         u_hessian = hessian(self.u_net, argnums=(1, 2))(params, x, y)

@@ -52,7 +52,7 @@ python3 main.py --config=configs/baseline.py \
   the network's own prediction at the end of each window becomes the next initial condition,
   and `--config.training.resume=True` continues an interrupted cascade.
 - Vorticity is never an output: $\omega = v_x - u_y$ is obtained by differentiating the
-  network, so the momentum residuals `{"ru", "rv"}` and continuity `{"rc"}` each carry their
+  network, so the momentum residuals (`u`, `v`) and continuity (`p`) each carry their
   own adaptive weight.
 - The Re 10⁶ case uses schedule-free SOAP and evaluates initial conditions with the averaged
   parameters (`get_eval_params`).

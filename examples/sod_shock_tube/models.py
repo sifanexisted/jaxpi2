@@ -36,10 +36,9 @@ class Euler1D(ForwardIVP):
         self.u_right = 0.0
         self.p_right = 0.1
 
-    def sol_net(self, params, t, x):
-        # Solution component damped by each residual (paired by key)
-        rho, u, p = self.neural_net(params, t, x)
-        return {"rc": rho, "ru": u, "rE": p}
+    # Names of neural_net's outputs; residuals are keyed by the variable
+    # they evolve in pseudo-time (mass -> rho, momentum -> u, energy -> p)
+    variables = ("rho", "u", "p")
 
     def neural_net(self, params, t, x):
         z = jnp.stack([t, x])
@@ -69,7 +68,7 @@ class Euler1D(ForwardIVP):
         rc = U1_t + F1_x
         ru = U2_t + F2_x
         rE = U3_t + F3_x
-        return {"rc": rc, "ru": ru, "rE": rE}
+        return {"rho": rc, "u": ru, "p": rE}
 
     @partial(jit, static_argnums=(0,))
     def losses(self, params, state, batch):

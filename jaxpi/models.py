@@ -221,6 +221,14 @@ class PINN:
     def __eq__(self, other):
         return self is other
 
+    #: Names of neural_net's outputs, in order — e.g. ("u", "v", "p").
+    #: Models with multiple residual components must declare this; r_net
+    #: then keys each residual by THE VARIABLE it evolves in pseudo-time
+    #: (momentum-x residual -> "u", continuity -> "p", ...), and residuals,
+    #: pts_weights, and solution components all pair automatically by name.
+    #: Single-component models may leave it as None.
+    variables = None
+
     def neural_net(self, params, *args):
         raise NotImplementedError("Subclasses should implement this!")
 
@@ -228,22 +236,17 @@ class PINN:
         raise NotImplementedError("Subclasses should implement this!")
 
     def sol_net(self, params, *args):
-        """Solution components for the pseudo-time damping term.
+        """neural_net's outputs as a dict keyed by `variables`.
 
-        Models with multiple residual components must override this to
-        return a dict with THE SAME KEYS as r_net, naming the solution
-        component each residual is damped toward, e.g.
-
-            def sol_net(self, params, t, x, y):
-                u, v, p = self.neural_net(params, t, x, y)
-                return {"ru": u, "rv": v, "rc": p}
-
-        Residuals and solutions are then paired by key — immune to any
-        ordering (JAX sorts dict keys when flattening pytrees). The default
-        returns neural_net's output, which suffices for single-component
-        models.
+        With residuals keyed by variable name, the pseudo-time damping pairs
+        each residual with its own solution component by key — immune to any
+        ordering (JAX sorts dict keys when flattening pytrees). No override
+        needed: declaring `variables` is sufficient.
         """
-        return self.neural_net(params, *args)
+        outputs = self.neural_net(params, *args)
+        if self.variables is None:
+            return outputs  # single-component models
+        return dict(zip(self.variables, outputs))
 
     def losses(self, params, state, batch):
         raise NotImplementedError("Subclasses should implement this!")
@@ -251,9 +254,9 @@ class PINN:
     def _stack_residuals(self, res, state):
         """Name and stack r_net outputs into keys and a (n_components, N) array.
 
-        Multi-component r_net implementations must return a dict, so that the
-        component names travel with the values (e.g. {"ru": ru, "rv": rv,
-        "rc": rc}). A bare array (or 1-tuple) is also supported for
+        Multi-component r_net implementations must return a dict keyed by
+        the VARIABLE each residual evolves in pseudo-time (e.g. {"u": ru,
+        "v": rv, "p": rc}). A bare array (or 1-tuple) is also supported for
         single-component problems and is labeled with the single pts_weights
         key. Unnamed multi-component returns are rejected: matching them to
         pts_weights by dict iteration order (alphabetical for ConfigDict)
@@ -278,8 +281,8 @@ class PINN:
             assert res.shape[0] == 1 and len(keys) == 1, (
                 f"r_net returned {res.shape[0]} unnamed residual components "
                 f"for pts_weights keys {keys}. Return a dict from r_net "
-                '(e.g. {"ru": ru, "rv": rv, "rc": rc}) so that components '
-                "are matched to their weights by name"
+                'keyed by variable (e.g. {"u": ru, "v": rv, "p": rc}) so '
+                "that components are matched to their weights by name"
             )
         return keys, res
 
@@ -287,26 +290,33 @@ class PINN:
         """Pseudo-time weights as a vector in residual-component order."""
         return jnp.array([state.pts_weights[key] for key in keys])
 
+    @staticmethod
+    def _residual_loss_names(keys):
+        """Loss-dict names for residual components: variable-keyed residuals
+        get a `_res` suffix ("u" -> "u_res") so losses are self-identifying
+        next to e.g. "u_ic"; the plain single-component "res" stays as-is."""
+        return [key if key == "res" else f"{key}_res" for key in keys]
+
     def _sols_matrix(self, sols, keys):
-        """sol_net output as a (n_components, N) matrix whose rows follow the
-        residual-component order `keys` — paired BY KEY, so no ordering
-        convention is involved. Single-component models may return a bare
-        array (or 1-tuple) from the default sol_net."""
+        """sol_net output as a (n_components, N) matrix whose rows follow
+        the residual-component order `keys` — matched by variable name.
+        Single-component models may return a bare array (or 1-tuple)."""
         if isinstance(sols, dict):
-            assert set(sols.keys()) == set(keys), (
-                f"sol_net returned keys {list(sols.keys())}, but the "
-                f"residual components are {keys}; they must match"
+            missing = set(keys) - set(sols.keys())
+            assert not missing, (
+                f"residuals are keyed by variables {keys}, but sol_net "
+                f"returned no component for {sorted(missing)} (variables "
+                f"declared: {self.variables})"
             )
             return jnp.stack([sols[key] for key in keys])
 
         if not isinstance(sols, (tuple, list)):
             sols = (sols,)
         assert len(sols) == 1 and len(keys) == 1, (
-            f"sol_net returned {len(sols)} unnamed solution components for "
-            f"residual keys {keys}. Override sol_net to return a dict with "
-            'the same keys as r_net (e.g. {"ru": u, "rv": v, "rc": p}) so '
-            "the pseudo-time damping pairs each residual with its solution "
-            "component by name"
+            f"model has {len(keys)} residual components {keys} but does not "
+            "declare `variables`. Set e.g. variables = (\"u\", \"v\", \"p\") "
+            "naming neural_net's outputs, and key r_net's residuals by the "
+            "variable each one evolves in pseudo-time"
         )
         return jnp.stack(sols)
 
@@ -664,7 +674,7 @@ class ForwardIVP(PINN):
         else:
             per_key_losses = jnp.mean(res_pred ** 2, axis=1)  # (n_components,)
 
-        return dict(zip(keys, per_key_losses))
+        return dict(zip(self._residual_loss_names(keys), per_key_losses))
 
 
 class ForwardBVP(PINN):
@@ -684,4 +694,4 @@ class ForwardBVP(PINN):
 
         per_key_losses = jnp.mean(res_pred ** 2, axis=1)  # (n_components,)
 
-        return dict(zip(keys, per_key_losses))
+        return dict(zip(self._residual_loss_names(keys), per_key_losses))

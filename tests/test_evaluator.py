@@ -39,14 +39,14 @@ def test_evaluator_logs_all_metrics():
     expected_keys = {
         "lr",
         # losses
-        "loss/u_ic", "loss/v_ic", "loss/ra", "loss/rb",
+        "loss/u_ic", "loss/v_ic", "loss/u_res", "loss/v_res",
         # raw (unweighted, non-causal) residual losses
-        "raw_loss/ra", "raw_loss/rb",
+        "raw_loss/u_res", "raw_loss/v_res",
         # adaptive weights
-        "weights/u_ic", "weights/v_ic", "weights/ra", "weights/rb",
-        "pts_weights/ra", "pts_weights/rb",
+        "weights/u_ic", "weights/v_ic", "weights/u_res", "weights/v_res",
+        "pts_weights/u", "pts_weights/v",
         # gradient norms
-        "grads/u_ic", "grads/v_ic", "grads/ra", "grads/rb",
+        "grads/u_ic", "grads/v_ic", "grads/u_res", "grads/v_res",
     }
     assert expected_keys <= set(log_dict.keys())
     for key, value in log_dict.items():

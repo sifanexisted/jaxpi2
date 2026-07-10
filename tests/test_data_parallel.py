@@ -29,14 +29,12 @@ from helpers import make_batch, make_config, make_model
 class StressIVP(ForwardIVP):
     """Two-component IVP with ICs flowing through the (sharded) batch."""
 
+    variables = ("u", "v")
+
     def neural_net(self, params, t, x):
         z = jnp.stack([t, x])
         out = self.state.apply_fn(params, z)
         return out[0], out[1]
-
-    def sol_net(self, params, t, x):
-        u, v = self.neural_net(params, t, x)
-        return {"rb": u, "ra": v}
 
     def u_net(self, params, t, x):
         return self.neural_net(params, t, x)[0]
@@ -50,7 +48,7 @@ class StressIVP(ForwardIVP):
         v_t = grad(self.v_net, argnums=1)(params, t, x)
         v_x = grad(self.v_net, argnums=2)(params, t, x)
         # deliberately non-alphabetical key order
-        return {"rb": u_t + u_x, "ra": v_t - 0.5 * v_x}
+        return {"v": v_t - 0.5 * v_x, "u": u_t + u_x}
 
     @partial(jit, static_argnums=(0,))
     def losses(self, params, state, batch):
@@ -72,8 +70,8 @@ class StressIVP(ForwardIVP):
 def stress_config():
     return make_config(
         out_dim=2,
-        loss_weights={"u_ic": 1.0, "v_ic": 1.0, "ra": 1.0, "rb": 1.0},
-        pts_weights={"ra": 1.0, "rb": 1.0},
+        loss_weights={"u_ic": 1.0, "v_ic": 1.0, "u_res": 1.0, "v_res": 1.0},
+        pts_weights={"u": 1.0, "v": 1.0},
         causal=True,
         num_chunks=8,
         pseudo_time=True,

@@ -66,10 +66,10 @@ def get_base_config():
     # Loss keys of the correction stages (stage index >= 1)
     multi_stage.loss_weights = ml_collections.ConfigDict(
         {"u0_diff": 100.0, "v0_diff": 100.0, "w0_diff": 100.0,
-         "fu": 1.0, "fv": 1.0, "fw": 1.0, "fc": 1.0}
+         "u_res": 1.0, "v_res": 1.0, "w_res": 1.0, "p_res": 1.0}
     )
     multi_stage.pts_weights = ml_collections.ConfigDict(
-        {"fu": 1.0, "fv": 1.0, "fw": 1.0, "fc": 1.0}
+        {"u": 1.0, "v": 1.0, "w": 1.0, "p": 1.0}
     )
     multi_stage.rejection_sampling = rejection_sampling = ml_collections.ConfigDict()
     rejection_sampling.enabled = True
@@ -87,7 +87,7 @@ def get_base_config():
     loss_weighting.strategy = "dynamic"  # "dynamic" or "constant", constant means fixed weights
     loss_weighting.loss_weights = ml_collections.ConfigDict(
         {"u_ic": 100.0, "v_ic": 100.0, "w_ic": 100.0,
-         "ru": 1.0, "rv": 1.0, "rw": 1.0, "rc": 1.0}
+         "u_res": 1.0, "v_res": 1.0, "w_res": 1.0, "p_res": 1.0}
     )
     loss_weighting.update_schedule = ml_collections.ConfigDict({
         "start": 100,
@@ -100,7 +100,7 @@ def get_base_config():
     pseudo_time.enabled = False
     pseudo_time.strategy = "constant"  # "dynamic" or "constant", constant means fixed weights
     pseudo_time.pts_weights = ml_collections.ConfigDict(
-        {"ru": 1.0, "rv": 1.0, "rw": 1.0, "rc": 1.0})
+        {"u": 1.0, "v": 1.0, "w": 1.0, "p": 1.0})
     pseudo_time.update_schedule = ml_collections.ConfigDict({
         "start": 100,
         "every": 1000,

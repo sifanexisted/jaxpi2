@@ -99,7 +99,7 @@ def train_stage(config, model, evaluator, samplers, window_idx, stage_idx, extra
         )
 
         def stop_fn(step, log_dict):
-            return step >= early_stop.start_step and log_dict["loss/rc"] < rc_threshold
+            return step >= early_stop.start_step and log_dict["loss/p_res"] < rc_threshold
 
     step_offset = ((window_idx - 1) * num_stages + stage_idx) * config.training.max_steps
     return train_loop(

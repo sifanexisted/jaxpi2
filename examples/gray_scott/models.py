@@ -24,10 +24,9 @@ class GrayScott(ForwardIVP):
         self.u_pred_fn = vmap(vmap(self.u_net, (None, None, 0, 0)), (None, 0, None, None))
         self.v_pred_fn = vmap(vmap(self.v_net, (None, None, 0, 0)), (None, 0, None, None))
 
-    def sol_net(self, params, t, x, y):
-        # Solution component damped by each residual (paired by key)
-        u, v = self.neural_net(params, t, x, y)
-        return {"ru": u, "rv": v}
+    # Names of neural_net's outputs; residuals are keyed by the variable
+    # they evolve in pseudo-time
+    variables = ("u", "v")
 
     def neural_net(self, params, t, x, y):
         t = t / self.t_max
@@ -60,7 +59,7 @@ class GrayScott(ForwardIVP):
         ru = u_t - self.b1 * (1 - u) + self.c1 * u * v ** 2 - self.eps1 * (u_xx + u_yy)
         rv = v_t + self.b2 * v - self.c2 * u * v ** 2 - self.eps2 * (v_xx + v_yy)
 
-        return {"ru": ru, "rv": rv}
+        return {"u": ru, "v": rv}
 
     @partial(jit, static_argnums=(0,))
     def losses(self, params, state, batch):

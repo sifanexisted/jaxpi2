@@ -69,7 +69,7 @@ loss_weighting.momentum = 0.9                                    # alpha
 ```
 
 Every loss term returned by your model's `losses()` dict gets its own weight — including
-each named residual component (`"ru"`, `"rv"`, `"rc"`, ...). Under multi-GPU sharding the
+each named residual loss (`"u_res"`, `"v_res"`, `"p_res"`, ...). Under multi-GPU sharding the
 per-term gradients are averaged across devices before the norms are taken, so the weights
 are identical on every device.
 

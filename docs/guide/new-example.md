@@ -71,8 +71,8 @@ class Heat1D(ForwardIVP):
         return jnp.linalg.norm(u_pred - u_ref) / jnp.linalg.norm(u_ref)
 ```
 
-For a **system** of PDEs, return named residuals — see
-[the dict-residual convention](/guide/concepts#the-dict-residual-convention).
+For a **system** of PDEs, declare `variables` and key each residual by its variable — see
+[the variable-keyed residual convention](/guide/concepts#the-variable-keyed-residual-convention).
 For a **steady** problem, subclass `ForwardBVP` instead.
 
 ## 3. The evaluator (`evaluators.py`)

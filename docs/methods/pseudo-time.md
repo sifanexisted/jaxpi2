@@ -65,13 +65,13 @@ the damping vanishes near the solution.
 ```python
 pseudo_time.enabled = True
 pseudo_time.strategy = "dynamic"          # adaptive tau; "constant" for fixed weights
-pseudo_time.pts_weights = {"ru": 1.0, "rv": 1.0, "rc": 1.0}   # 1/tau per component
+pseudo_time.pts_weights = {"u": 1.0, "v": 1.0, "p": 1.0}   # 1/tau per variable
 pseudo_time.update_schedule = {"start": 100, "every": 1000}
 pseudo_time.shrink.enabled = True
 ```
 
 The residual components and their weights are matched **by name** — hence the
-[dict-residual convention](/guide/concepts#the-dict-residual-convention).
+[variable-keyed residual convention](/guide/concepts#the-variable-keyed-residual-convention).
 
 ## Where it's used
 

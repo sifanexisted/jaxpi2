@@ -73,7 +73,7 @@ shrink as the residual converges:
 ```python
 pseudo_time.enabled = True
 pseudo_time.strategy = "dynamic"
-pseudo_time.pts_weights = {"ru": 1.0, "rv": 1.0, "rc": 1.0}
+pseudo_time.pts_weights = {"u": 1.0, "v": 1.0, "p": 1.0}
 pseudo_time.shrink.enabled = True
 ```
 

@@ -17,10 +17,9 @@ class NavierStokes3D(ForwardIVP):
         self.uvwp0_pred_fn = vmap(self.solution_net, (None, None, 0, 0, 0))
         self.vor0_pred_fn = vmap(self.vorticity_net, (None, None, 0, 0, 0))
 
-    def sol_net(self, params, t, x, y, z):
-        # Solution component damped by each residual (paired by key)
-        u, v, w, p = self.neural_net(params, t, x, y, z)
-        return {"ru": u, "rv": v, "rw": w, "rc": p}
+    # Names of neural_net's outputs; residuals are keyed by the variable
+    # they evolve in pseudo-time
+    variables = ("u", "v", "w", "p")
 
     def neural_net(self, params, t, x, y, z):
         t = t / self.t_max
@@ -81,7 +80,7 @@ class NavierStokes3D(ForwardIVP):
         rw = w_t + u * w_x + v * w_y + w * w_z + p_z - self.nu * w_laplace
         rc = u_x + v_y + w_z
 
-        return {"ru": ru, "rv": rv, "rw": rw, "rc": rc}
+        return {"u": ru, "v": rv, "w": rw, "p": rc}
 
     @partial(jit, static_argnums=(0,))
     def losses(self, params, state, batch):
@@ -245,10 +244,10 @@ class MultiStage(NavierStokes3D):
         ru_prev, rv_prev, rw_prev, rc_prev = self.r_prev(t, x, y, z)
 
         return {
-            "fu": fu + ru_prev / self.eps,
-            "fv": fv + rv_prev / self.eps,
-            "fw": fw + rw_prev / self.eps,
-            "fc": fc + rc_prev / self.eps,
+            "u": fu + ru_prev / self.eps,
+            "v": fv + rv_prev / self.eps,
+            "w": fw + rw_prev / self.eps,
+            "p": fc + rc_prev / self.eps,
         }
 
     @partial(jit, static_argnums=(0,))
@@ -311,10 +310,10 @@ class MultiStage(NavierStokes3D):
             "u_ic": jnp.mean((u0_pred - u_batch) ** 2),
             "v_ic": jnp.mean((v0_pred - v_batch) ** 2),
             "w_ic": jnp.mean((w0_pred - w_batch) ** 2),
-            "ru": jnp.mean(ru_pred ** 2),
-            "rv": jnp.mean(rv_pred ** 2),
-            "rw": jnp.mean(rw_pred ** 2),
-            "rc": jnp.mean(rc_pred ** 2),
+            "u_res": jnp.mean(ru_pred ** 2),
+            "v_res": jnp.mean(rv_pred ** 2),
+            "w_res": jnp.mean(rw_pred ** 2),
+            "p_res": jnp.mean(rc_pred ** 2),
         }
 
     def _r_solution(self, params, t, x, y, z):

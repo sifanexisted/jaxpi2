@@ -34,7 +34,7 @@ python3 main.py --config=configs/baseline.py
 
 ## Notes
 
-- Four residual components `{"ru", "rv", "rc", "re"}` (momentum, continuity, energy), each
+- Four residual components keyed by variable (`u`, `v`, `p`, `temp`: momentum, continuity, energy), each
   with its own adaptive weight.
 - Uses a dedicated boundary-condition sampler for the walls in addition to IC and residual
   samplers — a template for problems with several point sets per batch.

@@ -24,10 +24,9 @@ class NavierStokes2D(ForwardBVP):
         # Non-dimensionalized domain length and width
         self.L, self.W = self.wall_coords.max(axis=0) - self.wall_coords.min(axis=0)
 
-    def sol_net(self, params, x, y):
-        # Solution component damped by each residual (paired by key)
-        u, v, p = self.neural_net(params, x, y)
-        return {"ru": u, "rv": v, "rc": p}
+    # Names of neural_net's outputs; residuals are keyed by the variable
+    # they evolve in pseudo-time
+    variables = ("u", "v", "p")
 
     def neural_net(self, params, x, y):
         x = x / self.L  # rescale x into [0, 1]
@@ -65,7 +64,7 @@ class NavierStokes2D(ForwardBVP):
         rv = u * v_x + v * v_y + p_y - self.nu * (v_xx + v_yy)
         rc = u_x + v_y
 
-        return {"ru": ru, "rv": rv, "rc": rc}
+        return {"u": ru, "v": rv, "p": rc}
 
     @partial(jit, static_argnums=(0,))
     def losses(self, params, state, batch):

@@ -59,9 +59,9 @@ def get_base_config():
             "rho_ic": 10000.0,
             "u_ic": 10000.0,
             "p_ic": 10000.0,
-            "ru": 1.0,
-            "rc": 1.0,
-            "rE": 1.0,
+            "u_res": 1.0,
+            "rho_res": 1.0,
+            "p_res": 1.0,
         }
     )
     loss_weighting.update_schedule = ml_collections.ConfigDict({
@@ -75,7 +75,7 @@ def get_base_config():
     pseudo_time.enabled = False
     pseudo_time.strategy = "constant"  # "dynamic" or "constant" constant means fixed weights
     pseudo_time.pts_weights = ml_collections.ConfigDict(
-        {"rc": 1.0, "ru": 1.0, "rE": 1.0})
+        {"rho": 1.0, "u": 1.0, "p": 1.0})
     pseudo_time.update_schedule = ml_collections.ConfigDict({
         "start": 10,
         "every": 100,  # used when schedule="constant"

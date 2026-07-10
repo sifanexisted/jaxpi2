@@ -136,20 +136,18 @@ class TinyIVP(ForwardIVP):
 class TwoComponentIVP(ForwardIVP):
     """Two-residual model whose r_net dict keys are NOT in alphabetical order."""
 
+    variables = ("u", "v")
+
     def neural_net(self, params, t, x):
         z = jnp.stack([t, x])
         out = self.state.apply_fn(params, z)
         return out[0], out[1]
 
-    def sol_net(self, params, t, x):
-        u, v = self.neural_net(params, t, x)
-        return {"rb": u, "ra": v}
-
     def r_net(self, params, t, x):
         u, v = self.neural_net(params, t, x)
-        # First residual ("rb") is identically 0, second ("ra") identically 3,
-        # so the two components are unambiguously distinguishable by value.
-        return {"rb": 0.0 * u, "ra": 0.0 * v + 3.0}
+        # Declared non-alphabetically; v's residual is identically 3 and u's
+        # identically 0, so the components are distinguishable by value.
+        return {"v": 0.0 * v + 3.0, "u": 0.0 * u}
 
     def losses(self, params, state, batch):
         return self.compute_residual_losses(params, state, batch)

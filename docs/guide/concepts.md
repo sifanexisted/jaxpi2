@@ -47,24 +47,33 @@ class Burgers(ForwardIVP):
 - The base class provides the sharded training step, adaptive weight updates, and vmapped
   prediction functions (`sol_pred_fn`, `r_pred_fn`). You never write a training loop.
 
-## The dict-residual convention
+## The variable-keyed residual convention
 
-Systems of PDEs return **named** residuals:
+Systems of PDEs share **one namespace: the solution variable names**. The model declares
+its variables, and each residual is keyed by the variable it evolves in pseudo-time
+(momentum-x residual → `u`, continuity → `p`):
 
 ```python
-def r_net(self, params, t, x, y):
-    ...
-    return {"ru": ru, "rv": rv, "rc": rc}
+class NavierStokes2D(ForwardBVP):
+    variables = ("u", "v", "p")   # names of neural_net's outputs, in order
+
+    def r_net(self, params, t, x, y):
+        ...
+        return {"u": ru, "v": rv, "p": rc}
 ```
 
-::: warning Why a dict?
-Loss terms and pseudo-time weights are matched to residual components **by name**. Returning
-an unnamed tuple would leave the pairing to dict iteration order (alphabetical for configs),
-which silently mislabels losses — JAXPI rejects multi-component tuples with a clear error.
+::: warning Why one namespace?
+Residuals, pseudo-time weights, and solution components then pair **by key,
+automatically** — no ordering conventions (JAX sorts dict keys when flattening pytrees, so
+positional pairings silently permute). Unnamed multi-component tuples are rejected with a
+clear error.
 :::
 
-The keys must match `config.pseudo_time.pts_weights` (and appear in
-`config.loss_weighting.loss_weights`).
+- `config.pseudo_time.pts_weights` uses the same variable keys: `{"u": 1.0, "v": 1.0, "p": 1.0}`.
+- Residual **losses** get a `_res` suffix so they are self-identifying next to other terms:
+  loss names follow the uniform `<variable>_<term>` pattern (`u_ic`, `u_bc`, `u_res`), and
+  `config.loss_weighting.loss_weights` uses those names.
+- Single-component problems skip all of this: return a bare residual and use the `"res"` key.
 
 ## Samplers
 

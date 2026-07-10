@@ -152,26 +152,26 @@ def test_residual_losses_follow_dict_keys():
     r_net dict (whatever its order), not ConfigDict's sorted key order."""
     config = make_config(
         out_dim=2,
-        loss_weights={"ra": 1.0, "rb": 1.0},
-        pts_weights={"ra": 1.0, "rb": 1.0},
+        loss_weights={"u_res": 1.0, "v_res": 1.0},
+        pts_weights={"u": 1.0, "v": 1.0},
     )
     model = make_model(config, model_cls=TwoComponentIVP)
     batch = make_batch(jax.random.PRNGKey(4))
 
     loss_dict = model.compute_residual_losses(model.state.params, model.state, batch)
 
-    # r_net returns {"rb": 0, "ra": 3}; a zip against alphabetically sorted
+    # r_net returns {"v": 3, "u": 0} (non-alphabetical); a zip against sorted
     # pts_weights keys would swap the two losses.
-    np.testing.assert_allclose(loss_dict["rb"], 0.0, atol=1e-6)
-    np.testing.assert_allclose(loss_dict["ra"], 9.0, rtol=1e-5)
+    np.testing.assert_allclose(loss_dict["u_res"], 0.0, atol=1e-6)
+    np.testing.assert_allclose(loss_dict["v_res"], 9.0, rtol=1e-5)
 
 
 def test_multi_component_tuple_return_raises():
     """Unnamed multi-component residuals are ambiguous and must be rejected."""
     config = make_config(
         out_dim=2,
-        loss_weights={"ra": 1.0, "rb": 1.0},
-        pts_weights={"ra": 1.0, "rb": 1.0},
+        loss_weights={"u_res": 1.0, "v_res": 1.0},
+        pts_weights={"u": 1.0, "v": 1.0},
     )
     model = make_model(config, model_cls=TupleTwoComponentIVP)
     batch = make_batch(jax.random.PRNGKey(5))
@@ -182,8 +182,8 @@ def test_multi_component_tuple_return_raises():
 def test_residual_dict_keys_must_match_pts_weights():
     config = make_config(
         out_dim=2,
-        loss_weights={"ra": 1.0, "rb": 1.0},
-        pts_weights={"ra": 1.0, "rc": 1.0},  # "rc" instead of "rb"
+        loss_weights={"u_res": 1.0, "v_res": 1.0},
+        pts_weights={"u": 1.0, "w": 1.0},  # "w" instead of "v"
     )
     model = make_model(config, model_cls=TwoComponentIVP)
     batch = make_batch(jax.random.PRNGKey(5))
@@ -196,8 +196,8 @@ def test_pts_weights_applied_by_name():
     by dict iteration order."""
     config = make_config(
         out_dim=2,
-        loss_weights={"ra": 1.0, "rb": 1.0},
-        pts_weights={"ra": 2.0, "rb": 5.0},
+        loss_weights={"u_res": 1.0, "v_res": 1.0},
+        pts_weights={"u": 5.0, "v": 2.0},
         pseudo_time=True,
     )
     model = make_model(config, model_cls=TwoComponentIVP)
@@ -209,15 +209,15 @@ def test_pts_weights_applied_by_name():
     loss_dict = model.compute_residual_losses(
         state.params, state, batch, pseudo_time=True
     )
-    np.testing.assert_allclose(loss_dict["rb"], 0.0, atol=1e-6)
-    np.testing.assert_allclose(loss_dict["ra"], 9.0, rtol=1e-5)
+    np.testing.assert_allclose(loss_dict["u_res"], 0.0, atol=1e-6)
+    np.testing.assert_allclose(loss_dict["v_res"], 9.0, rtol=1e-5)
 
-    # The weight vector itself must follow the r_net dict order ("rb", "ra")
+    # The weight vector itself must follow the r_net dict order ("v", "u")
     keys, _ = model._stack_residuals(
-        {"rb": jax.numpy.zeros((4,)), "ra": jax.numpy.zeros((4,))}, state
+        {"v": jax.numpy.zeros((4,)), "u": jax.numpy.zeros((4,))}, state
     )
     weights = model._pts_weight_vector(keys, state)
-    np.testing.assert_allclose(np.asarray(weights), [5.0, 2.0])
+    np.testing.assert_allclose(np.asarray(weights), [2.0, 5.0])
 
 
 def test_update_loss_weights_matches_reference():
@@ -261,11 +261,13 @@ def test_pseudo_time_pairs_residuals_with_their_solutions():
     component. JAX sorts dict keys when flattening pytrees, so any positional
     convention silently permutes the pairing (the misalignment that broke the
     3-component Navier-Stokes examples: continuity residual damped toward the
-    u-velocity). Residuals and sol_net components are paired BY KEY."""
+    u-velocity). Residuals are keyed by VARIABLE and sol_net (built from the
+    `variables` declaration) shares that namespace, so everything pairs by
+    key automatically."""
     config = make_config(
         out_dim=2,
         loss_weights={"res": 1.0},
-        pts_weights={"rb": 1.0, "ra": 1.0},
+        pts_weights={"u": 1.0, "v": 1.0},
     )
     from helpers import TwoComponentIVP
 
@@ -276,27 +278,28 @@ def test_pseudo_time_pairs_residuals_with_their_solutions():
     keys, res = model._stack_residuals(
         model.r_pred_fn(model.state.params, *coords), model.state
     )
-    # rb is identically 0 and ra identically 3: whatever the row order,
-    # keys and rows must stay together
+    # u's residual is identically 0 and v's identically 3: whatever the row
+    # order, keys and rows must stay together
     by_key = dict(zip(keys, np.asarray(res)))
-    np.testing.assert_allclose(by_key["rb"], 0.0, atol=1e-6)
-    np.testing.assert_allclose(by_key["ra"], 3.0, atol=1e-6)
+    np.testing.assert_allclose(by_key["u"], 0.0, atol=1e-6)
+    np.testing.assert_allclose(by_key["v"], 3.0, atol=1e-6)
 
-    # sol_net returns {"rb": u, "ra": v}: rows must follow `keys` by name
+    # sol_net = dict(zip(variables, neural_net(...))): rows must be routed
+    # to the residual order in `keys` by variable name
     sols = model.sol_pred_fn(model.state.params, *coords)
     u, v = model.neural_net(model.state.params, batch[0, 0], batch[0, 1])
     mat = model._sols_matrix(sols, keys)
     np.testing.assert_allclose(
-        np.asarray(mat[keys.index("rb")][0]), np.asarray(u), rtol=1e-6
+        np.asarray(mat[keys.index("u")][0]), np.asarray(u), rtol=1e-6
     )
     np.testing.assert_allclose(
-        np.asarray(mat[keys.index("ra")][0]), np.asarray(v), rtol=1e-6
+        np.asarray(mat[keys.index("v")][0]), np.asarray(v), rtol=1e-6
     )
 
-    # sol_net keys must match the residual keys
+    # sol_net must provide a component for every residual variable
     with pytest.raises(AssertionError):
-        model._sols_matrix({"rb": mat[0], "wrong": mat[1]}, keys)
+        model._sols_matrix({"u": mat[0], "wrong": mat[1]}, keys)
 
-    # multi-component models cannot fall back to the unnamed default sol_net
+    # multi-component models must declare `variables` (unnamed fallback fails)
     with pytest.raises(AssertionError):
         model._sols_matrix((mat[0], mat[1]), keys)
