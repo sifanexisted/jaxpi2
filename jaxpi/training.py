@@ -6,6 +6,7 @@ single `train_loop`. Time-dependent problems trained forward in time over
 consecutive windows use the `train_time_windows` orchestrator on top of it.
 """
 
+import os
 import time
 
 from absl import logging
@@ -41,19 +42,45 @@ def sample_batches(samplers):
         yield from iter(samplers)
 
 
-def _ensure_wandb(config):
+def _ensure_wandb(config, run_dir=None):
     """Initialize W&B once, on the first host only.
 
     The entity defaults to the logged-in account; set `config.wandb.entity`
     (e.g. your personal username) to log somewhere other than your default
     team, or run with WANDB_MODE=offline to keep runs local.
+
+    When `run_dir` is given, the W&B run id is persisted there (next to the
+    checkpoints) and reused when `config.training.resume` is set, so a
+    restarted run continues the same W&B run and its charts stay one
+    continuous curve. Without this, every restart creates a new W&B run whose
+    first logged step is wherever the checkpoints left off (e.g. a run
+    resumed in time window 3 appears to "start" at step 100k).
     """
-    if jax.process_index() == 0 and wandb.run is None:
-        wandb.init(
-            project=config.wandb.project,
-            name=config.wandb.name,
-            entity=config.wandb.get("entity", None),
-        )
+    if jax.process_index() != 0 or wandb.run is not None:
+        return
+
+    run_id = None
+    id_file = os.path.join(run_dir, "wandb_id.txt") if run_dir is not None else None
+    if (
+        id_file is not None
+        and config.training.get("resume", False)
+        and os.path.exists(id_file)
+    ):
+        with open(id_file) as f:
+            run_id = f.read().strip() or None
+
+    wandb.init(
+        project=config.wandb.project,
+        name=config.wandb.name,
+        entity=config.wandb.get("entity", None),
+        id=run_id,
+        resume="allow" if run_id is not None else None,
+    )
+
+    if id_file is not None and wandb.run is not None:
+        os.makedirs(run_dir, exist_ok=True)
+        with open(id_file, "w") as f:
+            f.write(wandb.run.id)
 
 
 def train_loop(
@@ -66,6 +93,7 @@ def train_loop(
     eval_args=(),
     step_offset=0,
     stop_fn=None,
+    static_log=None,
 ):
     """Run up to `config.training.max_steps` optimization steps on `model`.
 
@@ -84,6 +112,8 @@ def train_loop(
         consecutive windows/stages produce one continuous curve.
       stop_fn: optional `(step, log_dict) -> bool` early-stopping predicate,
         evaluated whenever metrics are logged.
+      static_log: optional dict merged into every logged metrics dict (e.g.
+        {"time_window": 2}), so run phases are identifiable in W&B charts.
 
     Returns the model (its `state` is updated in place).
     """
@@ -131,6 +161,8 @@ def train_loop(
         if jax.process_index() == 0 and step % config.logging.log_every_steps == 0:
             end_time = time.time()
             log_dict = evaluator(model, model.state, loss_dict, batch, *eval_args)
+            if static_log:
+                log_dict = {**log_dict, **static_log}
             wandb.log(log_dict, step + step_offset)
 
             logger.log_iter(step, start_time, end_time, log_dict)
@@ -161,7 +193,9 @@ def train_loop(
 
 def train(config, model, batches, evaluator=None, eval_args=(), stop_fn=None):
     """Single-run training: `train_loop` with the standard checkpoint layout."""
-    ckpt_mngr = create_checkpoint_manager(config.saving, get_ckpt_path(config))
+    ckpt_path = get_ckpt_path(config)
+    _ensure_wandb(config, run_dir=os.path.dirname(ckpt_path))
+    ckpt_mngr = create_checkpoint_manager(config.saving, ckpt_path)
     return train_loop(
         config,
         model,
@@ -207,8 +241,8 @@ def train_time_windows(
     from a fresh initialization.
     """
     logger = Logger()
-    _ensure_wandb(config)
     ckpt_path = get_ckpt_path(config)
+    _ensure_wandb(config, run_dir=os.path.dirname(ckpt_path))
 
     # Resume from the last checkpointed time window, if requested and available
     start_idx = 0
@@ -279,6 +313,7 @@ def train_time_windows(
             ckpt_mngr=ckpt_mngr,
             eval_args=eval_args,
             step_offset=idx * config.training.max_steps,
+            static_log={"time_window": idx + 1},
         )
 
         if propagate_ic is not None:

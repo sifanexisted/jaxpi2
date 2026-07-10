@@ -12,7 +12,7 @@ from jaxpi.checkpointing import (
     has_checkpoint_steps,
     latest_time_window,
 )
-from jaxpi.training import sample_batches, train_loop, train_time_windows
+from jaxpi.training import _ensure_wandb, sample_batches, train_loop, train_time_windows
 
 from helpers import make_batch, make_config, make_model
 
@@ -277,6 +277,127 @@ def test_train_time_windows_resume_mid_window(tmp_path, monkeypatch):
     # propagate_ic: once for the IC of re-entered window 2 (idx 0), once
     # after window 2 finishes (idx 1)
     assert propagated == [0, 1]
+
+
+def _window_samplers(window_idx):
+    def gen():
+        key = jax.random.PRNGKey(window_idx)
+        while True:
+            key, subkey = jax.random.split(key)
+            yield make_batch(subkey)
+
+    return gen()
+
+
+def test_train_time_windows_step_offsets_on_resume(tmp_path, monkeypatch, offline_wandb):
+    """A resumed run must log at exactly the W&B steps where the previous
+    session left off: no re-logging of finished windows, no gaps or jumps."""
+    monkeypatch.chdir(tmp_path)
+    config = small_config()  # max_steps=30, log_every=10
+
+    model = make_model(config)
+    train_time_windows(config, model, _window_samplers)
+    # window 1 at offset 0, window 2 at offset 30
+    assert offline_wandb == [0, 10, 20, 30, 40, 50]
+
+    session_a = len(offline_wandb)
+    config.training.resume = True
+    config.training.num_time_windows = 3
+    model2 = make_model(config)
+    train_time_windows(config, model2, _window_samplers)
+
+    # Only window 3 is trained, logged at offset 2 * 30
+    assert offline_wandb[session_a:] == [60, 70, 80]
+
+
+def test_train_time_windows_mid_window_resume_step_offset(
+    tmp_path, monkeypatch, offline_wandb
+):
+    """Re-entering an interrupted window logs from (window offset + restored
+    step): the finished part of the window and earlier windows are not
+    re-trained or re-logged."""
+    monkeypatch.chdir(tmp_path)
+    config = small_config()
+
+    model = make_model(config)
+    train_time_windows(config, model, _window_samplers)  # windows 1, 2 @ 30 steps
+    session_a = len(offline_wandb)
+
+    # Window 2's 30-step checkpoint is partial for a 50-step run
+    config.training.resume = True
+    config.training.max_steps = 50
+    model2 = make_model(config)
+    train_time_windows(config, model2, _window_samplers)
+
+    # Window 2 resumes at step 30 with offset 1 * 50: steps 80, 90 only
+    assert offline_wandb[session_a:] == [80, 90]
+
+
+def test_train_time_windows_logs_window_index(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    config = small_config()
+
+    logged = []
+    monkeypatch.setattr(
+        wandb, "log", lambda log_dict, step=None: logged.append((step, log_dict))
+    )
+
+    model = make_model(config)
+    train_time_windows(config, model, _window_samplers)
+
+    windows = [d["time_window"] for _, d in logged]
+    assert windows == [1, 1, 1, 2, 2, 2]
+
+
+class _FakeRun:
+    def __init__(self, run_id):
+        self.id = run_id
+
+
+def test_ensure_wandb_resumes_same_run(tmp_path, monkeypatch):
+    """With resume enabled, a restarted session reuses the persisted W&B run
+    id (continuing the same run) instead of creating a fresh run that starts
+    mid-axis; without resume, a new id is generated and persisted."""
+    init_calls = []
+    counter = itertools.count(1)
+
+    def fake_init(**kwargs):
+        init_calls.append(kwargs)
+        run_id = kwargs.get("id") or f"generated-{next(counter)}"
+        wandb.run = _FakeRun(run_id)
+
+    monkeypatch.setattr(wandb, "init", fake_init)
+    monkeypatch.setattr(wandb, "run", None)
+    monkeypatch.setattr(jax, "process_index", lambda: 0)
+
+    config = small_config()
+    run_dir = str(tmp_path / "test-run")
+    id_file = os.path.join(run_dir, "wandb_id.txt")
+
+    # First session: new run, id persisted
+    _ensure_wandb(config, run_dir=run_dir)
+    assert init_calls[-1]["id"] is None and init_calls[-1]["resume"] is None
+    assert open(id_file).read() == "generated-1"
+
+    # Restart with resume: the persisted id is reused
+    wandb.run = None
+    config.training.resume = True
+    _ensure_wandb(config, run_dir=run_dir)
+    assert init_calls[-1]["id"] == "generated-1"
+    assert init_calls[-1]["resume"] == "allow"
+    assert open(id_file).read() == "generated-1"
+
+    # Fresh run without resume: stale id ignored and overwritten
+    wandb.run = None
+    config.training.resume = False
+    _ensure_wandb(config, run_dir=run_dir)
+    assert init_calls[-1]["id"] is None
+    assert open(id_file).read() == "generated-2"
+
+    # Already-initialized run: no double init
+    n = len(init_calls)
+    _ensure_wandb(config, run_dir=run_dir)
+    assert len(init_calls) == n
 
 
 def test_checkpoint_helpers(tmp_path):
