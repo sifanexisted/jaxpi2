@@ -1,58 +1,65 @@
 # Kolmogorov Flow
 
-Two-dimensional forced turbulence on a periodic domain — incompressible Navier–Stokes with a
-sinusoidal body force:
+2D incompressible Navier–Stokes on a periodic square, driven by a sinusoidal body force —
+the flow is unsteady and vortical:
 
 $$
 \frac{\partial \mathbf{u}}{\partial t} + (\mathbf{u} \cdot \nabla)\,\mathbf{u}
-  + \nabla p - \nu \nabla^2 \mathbf{u} = A \sin(k \pi y)\, \mathbf{e}_x,
-\qquad \nabla \cdot \mathbf{u} = 0 .
+  + \nabla p - \nu \nabla^2 \mathbf{u} = \mathbf{f},
+\qquad \nabla \cdot \mathbf{u} = 0,
+\qquad \mathbf{f} = (2 \sin(4\pi y),\, 0).
 $$
 
-The repository ships this problem at two very different Reynolds numbers:
+## Results
 
-| Example | Re | Forcing | Reference data |
-| --- | --- | --- | --- |
-| `examples/kolmogorov_flow` | $2 \times 10^3$ | $2\sin(4\pi y)$ | included (`data/kolmogorov_flow.npy`) |
-| `examples/kolmogorov_flow_Re1e6` | $10^6$ | $0.1\sin(4\pi y)$ | external DNS snapshot (see its `data/README.md`) |
+<div class="result-glance">
+  <span>vorticity error <strong>4.2e-02</strong></span>
+  <span>recipe <strong>4 time windows + fixed pseudo-time</strong></span>
+  <span>4 × 100k steps, single GPU</span>
+</div>
+
+The vortical dynamics are tracked over the full horizon to a relative vorticity error of
+**4.2e-02** (stitched across all four windows), versus **0.59** when trained as a single
+global fit — the time-window curriculum is the decisive ingredient for this flow.
+Pseudo-time stepping composes cleanly with it: constant damping weights (step size 1.0)
+train stably through every window, and an adaptive-weight variant matches it
+(4.4e-02 even without windows in the single-window configuration). The animation shows the
+prediction staying phase-locked with the reference as vortices merge and stretch; the
+error concentrates in the thin filaments between vortices.
 
 <figure class="example-figure">
-
-![Kolmogorov flow vorticity at Re 1e6](/jaxpi2/gallery/kolmogorov_flow_Re1e6.png)
-
-<figcaption>DNS vorticity at Re 10⁶ — fine filamentation over six orders of magnitude in scale.</figcaption>
+  <video src="/jaxpi2/results/kolmogorov_flow_pred.mp4" autoplay loop muted playsinline></video>
+  <figcaption>Reference, PINN prediction, and absolute error of the vorticity field over
+  all four time windows.</figcaption>
 </figure>
 
 <figure class="example-figure">
-  <video src="/jaxpi2/gallery/kolmogorov_flow.mp4" autoplay loop muted playsinline></video>
-  <figcaption>Reference vorticity evolution at Re 2000.</figcaption>
+
+![Kolmogorov flow convergence](/jaxpi2/results/kolmogorov_flow_convergence.png)
+
+<figcaption>Training losses and per-variable errors across the four windows (each window
+warm-starts from the previous one's parameters).</figcaption>
 </figure>
 
 ## Run
 
 ```bash
-# Moderate Reynolds number (reference data included)
 cd examples/kolmogorov_flow
-python3 main.py --config=configs/baseline.py
-
-# Re = 1e6 (point data_path at the DNS snapshot)
-cd examples/kolmogorov_flow_Re1e6
-python3 main.py --config=configs/baseline.py \
-    --config.data_path=/path/to/kolmogorov_flow_Re1e6.npy
+python3 main.py --config=configs/pseudo_time.py \
+    --config.pseudo_time.strategy=constant \
+    --config.training.num_time_windows=4
 ```
 
 | Config | Description |
 | --- | --- |
-| `configs/baseline.py` | PirateNet + causal weighting + time windows |
-| `configs/pseudo_time.py` | Adds adaptive pseudo-time stepping |
+| `configs/baseline.py` | PirateNet + causal weighting |
+| `configs/pseudo_time.py` | Adaptive pseudo-time stepping |
+| `configs/fixed_pseudo_time.py` | Constant pseudo-time weights |
 
 ## Notes
 
-- Both variants train forward in time with [time windows](/guide/training-techniques#time-window-curriculum):
-  the network's own prediction at the end of each window becomes the next initial condition,
-  and `--config.training.resume=True` continues an interrupted cascade.
-- Vorticity is never an output: $\omega = v_x - u_y$ is obtained by differentiating the
-  network, so the momentum residuals (`u`, `v`) and continuity (`p`) each carry their
-  own adaptive weight.
-- The Re 10⁶ case uses schedule-free SOAP and evaluates initial conditions with the averaged
-  parameters (`get_eval_params`).
+- Uses [time-window training](/guide/training-techniques#time-window-curriculum) with
+  transfer learning between windows; the vorticity is computed from the velocity network
+  by automatic differentiation ($\omega = v_x - u_y$).
+- The higher-Reynolds version of this problem is the
+  [Kolmogorov flow at Re 10⁶](/examples/kolmogorov_flow_Re1e6).

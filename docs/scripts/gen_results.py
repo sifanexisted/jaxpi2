@@ -38,6 +38,10 @@ RUN_OVERRIDES = {}
 # --windows); windowed examples default to their config value.
 WINDOW_OVERRIDES = {}
 
+# time_range the showcase run was trained with, when it differs from the
+# config default (overridable with --time-ranges, e.g. gray_scott=0:1.0).
+TIME_RANGE_OVERRIDES = {}
+
 
 def run_for(name):
     return RUN_OVERRIDES.get(name, f"{name}__baseline")
@@ -77,14 +81,24 @@ def load_config(name, config_file="baseline"):
         import importlib
 
         module = importlib.import_module(f"configs.{config_file}")
-        return module.get_config()
+        config = module.get_config()
+    if name in TIME_RANGE_OVERRIDES:
+        config.time_range = TIME_RANGE_OVERRIDES[name]
+    return config
 
 
 def restore(config, model, ckpt_root, run_name, windowed=False, window=1):
     path = os.path.join(ckpt_root, run_name, "ckpt")
     suffix = f"time_window_{window}" if windowed else None
     mngr = create_checkpoint_manager(config.saving, path, suffix=suffix)
-    model.state = restore_checkpoint(mngr, model.state)
+    try:
+        model.state = restore_checkpoint(mngr, model.state)
+    except ValueError:
+        # Aux state (e.g. loss/pts weight keys) may have been renamed since
+        # the run was trained; restore with the on-disk structure instead and
+        # keep only the parameters, which is all the figures need.
+        restored = mngr.restore(mngr.latest_step())
+        return restored["params"]
     # Use the raw training iterates, matching what the example evaluators log
     # during training (empirically better than the schedule-free averages at
     # the end of these runs, where the LR has fully decayed).
@@ -500,6 +514,51 @@ def gen_kolmogorov_flow(ckpt_root):
     return {"w_error": error}
 
 
+def gen_rayleigh_taylor(ckpt_root):
+    name, run = "rayleigh_taylor", run_for("rayleigh_taylor")
+    config = load_config(name)
+    with example(name):
+        import models
+        import utils
+
+        (uv_ref, p_ref, temp_ref, t_ref, mesh,
+         alpha1, alpha2, alpha3, alpha4, Ra, Pr, Ge) = utils.get_dataset(
+            time_range=config.time_range)
+
+        windows = windows_for(name, config)
+        num_time_steps = len(t_ref) // windows
+        t_star = t_ref[:num_time_steps]
+        dt = t_star[1] - t_star[0]
+        t1 = t_star[-1] + 1.1 * dt
+
+        model = create_model(
+            config, models.RayleighTaylor2D,
+            t_max=t1, alpha1=alpha1, alpha2=alpha2, alpha3=alpha3, alpha4=alpha4,
+        )
+
+        temp_pred = []
+        for k in range(windows):
+            params = restore(config, model, ckpt_root, run, windowed=True, window=k + 1)
+            temp_pred.append(
+                predict_snapshots(model.temp_pred_fn, params, t_star, jnp.asarray(mesh))
+            )
+        temp_pred = np.concatenate(temp_pred)
+
+    # mesh is y-major (x varies fastest): reshape to (T, ny, nx), then (T, nx, ny)
+    mesh = np.asarray(mesh)
+    nx = len(np.unique(np.round(mesh[:, 0], 6)))
+    ny = len(np.unique(np.round(mesh[:, 1], 6)))
+    ref = np.asarray(temp_ref)[: windows * num_time_steps]
+    error = rel_l2(temp_pred, ref)
+
+    ref_g = ref.reshape(-1, ny, nx).transpose(0, 2, 1)
+    pred_g = temp_pred.reshape(-1, ny, nx).transpose(0, 2, 1)
+    panels_2d(name, ref_g[-1], pred_g[-1], "RdYlBu_r", vsym=False)
+    animate_2d(name, ref_g, pred_g, t_ref[: windows * num_time_steps],
+               "RdYlBu_r", vsym=False)
+    return {"temp_error": error}
+
+
 def gen_bfs_flow(ckpt_root):
     name, run = "bfs_flow", run_for("bfs_flow")
     config = load_config(name)
@@ -554,6 +613,7 @@ GENERATORS = {
     "gray_scott": gen_gray_scott,
     "ginzburg_landau": gen_ginzburg_landau,
     "kolmogorov_flow": gen_kolmogorov_flow,
+    "rayleigh_taylor": gen_rayleigh_taylor,
     "bfs_flow": gen_bfs_flow,
 }
 
@@ -572,13 +632,23 @@ def main():
         help="per-example time-window count of the chosen run, e.g. "
              "gray_scott=4,kolmogorov_flow=4",
     )
+    parser.add_argument(
+        "--time-ranges", default=None,
+        help="per-example time_range of the chosen run when it differs from "
+             "the config default, e.g. gray_scott=0:1.0",
+    )
     args = parser.parse_args()
 
-    global RUN_OVERRIDES, WINDOW_OVERRIDES
+    global RUN_OVERRIDES, WINDOW_OVERRIDES, TIME_RANGE_OVERRIDES
     if args.runs:
         RUN_OVERRIDES = dict(pair.split("=") for pair in args.runs.split(","))
     if args.windows:
         WINDOW_OVERRIDES = dict(pair.split("=") for pair in args.windows.split(","))
+    if args.time_ranges:
+        TIME_RANGE_OVERRIDES = {
+            name: tuple(float(v) for v in rng.split(":"))
+            for name, rng in (pair.split("=") for pair in args.time_ranges.split(","))
+        }
 
     only = args.only.split(",") if args.only else list(GENERATORS)
     os.makedirs(OUT, exist_ok=True)

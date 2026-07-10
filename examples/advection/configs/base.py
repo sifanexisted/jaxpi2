@@ -13,7 +13,7 @@ def get_base_config():
 
     # Problem setup
     config.problem = problem = ml_collections.ConfigDict()
-    problem.c = 50.0  # advection speed
+    problem.c = 30.0  # advection speed
 
     # Arch
     config.arch = arch = ml_collections.ConfigDict()
@@ -84,8 +84,10 @@ def get_base_config():
 
     config.causal = causal = ml_collections.ConfigDict()
     causal.enabled = True
-    causal.num_chunks = 16
-    causal.tol = 1.0
+    causal.num_chunks = 32
+    # Fast transport produces large residuals; tol = 1.0 collapses the causal
+    # gates to zero and only the earliest chunk ever trains
+    causal.tol = 0.01
 
     # Logging
     config.logging = logging = ml_collections.ConfigDict()

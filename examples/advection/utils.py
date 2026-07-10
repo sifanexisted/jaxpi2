@@ -2,7 +2,7 @@ import jax.numpy as jnp
 from jax import vmap
 
 
-def get_dataset(T=2.0, L=2 * jnp.pi, c=50, n_t=200, n_x=128):
+def get_dataset(T=2.0, L=2 * jnp.pi, c=30, n_t=200, n_x=128):
     t_star = jnp.linspace(0, T, n_t)
     x_star = jnp.linspace(0, L, n_x)
 

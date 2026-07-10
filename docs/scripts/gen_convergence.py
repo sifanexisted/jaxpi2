@@ -26,18 +26,19 @@ CACHE = os.path.join(os.path.dirname(__file__), "cache")
 # example -> run whose convergence curve the example page shows (the
 # showcase run; defaults to the baseline when the baseline recipe wins)
 EXAMPLES = {
-    "advection": "advection__baseline",
+    "advection": "advection__c30_tol0.01",
     "allen_cahn": "allen_cahn__baseline",
     "burgers": "burgers__baseline",
     "inviscid_burgers": "inviscid_burgers__pseudo_time",
     "kdv": "kdv__pseudo_time",
     "ks": "ks__pseudo_time",
     "wave": "wave__baseline",
-    "sod_shock_tube": "sod_shock_tube__pseudo_time_v3",
+    "sod_shock_tube": "sod_shock_tube__baseline",
     "lid_driven_cavity": "lid_driven_cavity__pseudo_time_v2",
     "gray_scott": "gray_scott__pt_windows4",
     "ginzburg_landau": "ginzburg_landau__pseudo_time",
     "kolmogorov_flow": "kolmogorov_flow__fixed_pt_windows4_v2",
+    "rayleigh_taylor": "rayleigh_taylor__pseudo_time",
     "bfs_flow": "bfs_flow__fixed_pseudo_time_v3",
 }
 
@@ -95,7 +96,7 @@ ABLATIONS = {
         "Pseudo-time stepping — backward-facing step", "error/u",
         [("bfs_flow__baseline", "baseline"),
          ("bfs_flow__pseudo_time_v2", "adaptive pseudo-time"),
-         ("bfs_flow__fixed_pseudo_time_v3", "fixed pseudo-time")],
+         ("bfs_flow__fixed_pseudo_time_v2", "fixed pseudo-time")],
     ),
     "pseudo_time_ks": (
         "Pseudo-time stepping — Kuramoto–Sivashinsky", "error/l2",
