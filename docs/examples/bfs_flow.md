@@ -46,18 +46,50 @@ with `MeshSampler` since the geometry is non-rectangular.
 <figcaption>Reference velocity magnitude: recirculation bubble behind the step.</figcaption>
 </figure>
 
+## Results
+
+<div class="result-glance">
+  <span>relative L2 error <strong>0.016</strong></span>
+  <span>recipe <strong>fixed pseudo-time</strong></span>
+  <span>Re 800, 100k steps, single GPU</span>
+</div>
+
+The baseline never finds the recirculation bubble: it settles at a relative L2 error of
+**0.28** in $u$ (0.83 in $v$), an attached-flow spurious solution. Pseudo-time stepping
+recovers the separation, and here the *constant*-weight variant wins: **0.029** in $u$
+and 0.106 in $v$ — **0.016** in the velocity magnitude, a ~17× improvement over the
+baseline. The adaptive variant helps but lands mid-way (0.15 in $u$) and is
+seed-sensitive on this problem; the recirculating flow develops slowly enough that the
+adaptive step-size estimate keeps shrinking the damping too early.
+
+<figure class="example-figure">
+
+![Backward-facing step prediction vs reference](/jaxpi2/results/bfs_flow_pred.png)
+
+<figcaption>Reference and predicted velocity magnitude, and the absolute error —
+concentrated along the shear layer and reattachment region.</figcaption>
+</figure>
+
+<figure class="example-figure">
+
+![Backward-facing step convergence](/jaxpi2/results/bfs_flow_convergence.png)
+
+<figcaption>Training losses and per-variable relative L2 errors of the showcase
+(fixed pseudo-time) run.</figcaption>
+</figure>
+
 ## Run
 
 ```bash
 cd examples/bfs_flow
-python3 main.py --config=configs/baseline.py
+python3 main.py --config=configs/fixed_pseudo_time.py
 ```
 
 | Config | Description |
 | --- | --- |
 | `configs/baseline.py` | PirateNet baseline |
 | `configs/pseudo_time.py` | Adaptive pseudo-time stepping |
-| `configs/fixed_pseudo_time.py` | Constant pseudo-time weights |
+| `configs/fixed_pseudo_time.py` | Constant pseudo-time weights (showcase) |
 
 ## Notes
 
