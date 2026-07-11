@@ -6,7 +6,7 @@
     "l2_error": 4e-06
   },
   "bfs_flow": {
-    "l2_error": 0.015817
+    "l2_error": 0.015618
   },
   "burgers": {
     "l2_error": 4e-05

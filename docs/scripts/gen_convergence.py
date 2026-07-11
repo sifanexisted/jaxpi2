@@ -39,7 +39,9 @@ EXAMPLES = {
     "ginzburg_landau": "ginzburg_landau__pseudo_time",
     "kolmogorov_flow": "kolmogorov_flow__fixed_pt_windows4_v2",
     "rayleigh_taylor": "rayleigh_taylor__pseudo_time",
-    "bfs_flow": "bfs_flow__fixed_pseudo_time_v3",
+    # NOT v3 — that rerun diverged (final error/u = 15.5); v2 is the
+    # healthy corrected run the page numbers come from.
+    "bfs_flow": "bfs_flow__fixed_pseudo_time_v2",
 }
 
 # study -> (title, error metric, [(run suffix, label)])

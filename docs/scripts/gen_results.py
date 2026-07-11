@@ -584,18 +584,23 @@ def gen_bfs_flow(ckpt_root):
     error = rel_l2(U_pred, U_ref)
 
     coords = np.asarray(coords)
-    fig, axes = plt.subplots(3, 1, figsize=(8.5, 6.6), dpi=150, constrained_layout=True)
+    # The channel is 15:1 — keep the canvas as short as the strips, with
+    # slim horizontal colorbars, so the figure has no dead whitespace.
+    fig, axes = plt.subplots(3, 1, figsize=(8.5, 3.4), dpi=150, constrained_layout=True)
     for ax, field, title, cmap in [
         (axes[0], U_ref, "Reference", "viridis"),
         (axes[1], U_pred, "PINN prediction", "viridis"),
         (axes[2], np.abs(U_pred - U_ref), "Absolute error", "magma"),
     ]:
         im = ax.tricontourf(coords[:, 0], coords[:, 1], field, levels=100, cmap=cmap)
-        ax.set_title(title)
+        ax.set_title(title, fontsize=10)
         ax.set_aspect("equal")
         ax.set_xticks([])
         ax.set_yticks([])
-        fig.colorbar(im, ax=ax, shrink=0.9)
+        cbar = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.015, aspect=12)
+        cbar.ax.tick_params(labelsize=6)
+        cbar.locator = matplotlib.ticker.MaxNLocator(4)
+        cbar.update_ticks()
     _save(fig, name)
     return {"l2_error": error}
 
