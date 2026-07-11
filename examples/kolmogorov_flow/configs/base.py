@@ -13,8 +13,10 @@ def get_base_config():
     wandb.name = "baseline"
     wandb.tag = None
 
-    # Problem setup
-    config.time_range = [0.0, 0.4]
+    # Problem setup — fraction of the reference trajectory to use; the
+    # dataset (jax-cfd pseudo-spectral, 512^2 float64, Fourier-restricted
+    # to 256^2) spans t in [0, 4] with 21 frames (dt = 0.2).
+    config.time_range = [0.0, 1.0]
 
     # Arch
     config.arch = arch = ml_collections.ConfigDict()

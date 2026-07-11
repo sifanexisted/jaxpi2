@@ -67,7 +67,8 @@ def train_and_evaluate(config):
         u_star = u_ref[num_time_steps * window_idx: num_time_steps * (window_idx + 1), :]
         v_star = v_ref[num_time_steps * window_idx: num_time_steps * (window_idx + 1), :]
         w_star = w_ref[num_time_steps * window_idx: num_time_steps * (window_idx + 1), :]
-        return (t_star[::4], mesh[::4], u_star[::4, ::4], v_star[::4, ::4], w_star[::4, ::4])
+        # all frames in time (the dataset stores few, coarse frames), strided in space
+        return (t_star, mesh[::4], u_star[:, ::4], v_star[:, ::4], w_star[:, ::4])
 
     def propagate_ic(model, window_idx):
         if window_idx + 1 >= config.training.num_time_windows:
