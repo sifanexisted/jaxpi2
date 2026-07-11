@@ -13,8 +13,8 @@ def get_base_config():
     wandb.name = "baseline"
     wandb.tag = None
 
-    # Problem setup
-    config.time_range = [0.1, 0.6]
+    # Problem setup (tuple, not list, so the CLI can override it)
+    config.time_range = (0.1, 0.6)
 
     # Arch
     config.arch = arch = ml_collections.ConfigDict()

@@ -14,7 +14,9 @@ def get_base_config():
     wandb.tag = None
 
     # Problem steup
-    config.time_range = [0.0, 0.4]
+    # Fraction of the reference trajectory to use; tuple so it can be
+    # overridden from the CLI (lists are not CLI-overridable).
+    config.time_range = (0.0, 0.4)
 
     # Arch
     config.arch = arch = ml_collections.ConfigDict()
