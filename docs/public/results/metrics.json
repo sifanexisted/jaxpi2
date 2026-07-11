@@ -15,7 +15,7 @@
     "l2_error": 0.011194
   },
   "gray_scott": {
-    "l2_error": 0.000377
+    "l2_error": 0.007045
   },
   "inviscid_burgers": {
     "l2_error": 0.126639
@@ -33,7 +33,7 @@
     "l2_error": 0.042867
   },
   "rayleigh_taylor": {
-    "temp_error": 0.009319
+    "temp_error": 0.008349
   },
   "sod_shock_tube": {
     "p_error": 0.051605,

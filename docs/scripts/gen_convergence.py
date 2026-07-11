@@ -35,13 +35,22 @@ EXAMPLES = {
     "wave": "wave__baseline",
     "sod_shock_tube": "sod_shock_tube__baseline",
     "lid_driven_cavity": "lid_driven_cavity__pseudo_time_v2",
-    "gray_scott": "gray_scott__pt_windows4",
+    "gray_scott": "gray_scott__pt_windows4_no_transfer",
     "ginzburg_landau": "ginzburg_landau__pseudo_time",
     "kolmogorov_flow": "kolmogorov_flow__fixed_pt_windows4_v2",
-    "rayleigh_taylor": "rayleigh_taylor__pseudo_time",
+    "rayleigh_taylor": "rayleigh_taylor__full_traj_5win_noTL",
     # NOT v3 — that rerun diverged (final error/u = 15.5); v2 is the
     # healthy corrected run the page numbers come from.
     "bfs_flow": "bfs_flow__fixed_pseudo_time_v2",
+}
+
+# Showcase runs that resumed from a window-1 checkpoint copied from a
+# recipe-identical run (window 1 always trains from scratch, so it is the same
+# under either transfer-learning setting): their W&B history starts at window 2.
+# Splice window 1 (steps <= max_step) from the source run's history.
+HISTORY_PREFIX = {
+    "gray_scott": ("gray_scott__pt_windows4_v2", 100_000),
+    "rayleigh_taylor": ("rayleigh_taylor__full_traj_5win", 100_000),
 }
 
 # study -> (title, error metric, [(run suffix, label)])
@@ -202,8 +211,14 @@ def convergence_figure(name, rows):
         ax.set_title(title)
         ax.set_xlabel("step")
         ax.grid(alpha=0.25, which="both")
+        ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(5))
+        ax.xaxis.set_major_formatter(
+            matplotlib.ticker.FuncFormatter(
+                lambda x, _: f"{x / 1000:g}k" if x else "0"))
         if keys:
-            ax.legend(frameon=False)
+            # Legend outside the axes so it never overlaps the curves.
+            ax.legend(frameon=False, loc="center left", bbox_to_anchor=(1.01, 0.5),
+                      borderaxespad=0)
     path = os.path.join(OUT, f"{name}_convergence.png")
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
@@ -275,6 +290,13 @@ def main():
         if not rows:
             print(f"  {name}: run not found, skipped")
             continue
+        if name in HISTORY_PREFIX:
+            src, max_step = HISTORY_PREFIX[name]
+            src_rows = get(src)
+            if src_rows:
+                start = min(r["_step"] for r in rows if r["_step"] > max_step)
+                rows = [r for r in src_rows if r["_step"] <= max_step] + \
+                       [r for r in rows if r["_step"] >= start]
         convergence_figure(name, rows)
 
     print("ablation figures")

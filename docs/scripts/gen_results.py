@@ -32,15 +32,27 @@ DEFAULT_CKPT_ROOT = "/data/sifanw/pinns/site"
 
 # Which W&B/checkpoint run supplies each example's showcase figure;
 # overridable with --runs (defaults to <example>__baseline).
-RUN_OVERRIDES = {}
+# Note: both no-transfer runs reuse a window-1 checkpoint copied from a
+# recipe-identical earlier run (window 1 always trains from scratch, so it is
+# the same under either transfer-learning setting).
+RUN_OVERRIDES = {
+    "gray_scott": "gray_scott__pt_windows4_no_transfer",
+    "rayleigh_taylor": "rayleigh_taylor__full_traj_5win_noTL",
+}
 
 # Number of time windows the showcase run was trained with (overridable with
 # --windows); windowed examples default to their config value.
-WINDOW_OVERRIDES = {}
+WINDOW_OVERRIDES = {
+    "gray_scott": 4,
+    "rayleigh_taylor": 5,
+}
 
 # time_range the showcase run was trained with, when it differs from the
 # config default (overridable with --time-ranges, e.g. gray_scott=0:1.0).
-TIME_RANGE_OVERRIDES = {}
+TIME_RANGE_OVERRIDES = {
+    "gray_scott": (0.0, 1.0),
+    "rayleigh_taylor": (0.0, 9.75),
+}
 
 
 def run_for(name):

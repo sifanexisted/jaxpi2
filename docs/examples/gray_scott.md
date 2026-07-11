@@ -14,7 +14,7 @@ exactly the setting where PINNs are prone to spurious steady solutions.
 ## Results
 
 <div class="result-glance">
-  <span>relative L2 error <strong>3.8e-04</strong></span>
+  <span>relative L2 error <strong>7.0e-03</strong></span>
   <span>recipe <strong>4 time windows + adaptive pseudo-time</strong></span>
   <span>4 × 100k steps, single GPU</span>
 </div>
@@ -24,10 +24,10 @@ network converges to the spurious homogeneous state and never grows the pattern 
 relative L2 error of **0.90** despite a small training loss. Splitting the horizon into
 four [time windows](/guide/training-techniques#time-window-curriculum) and enabling
 [adaptive pseudo-time stepping](/methods/pseudo-time) recovers the full pattern-formation
-dynamics at **3.8e-04** over the stitched trajectory — a ~2000× improvement, with every
-window converging below 1e-03. Pseudo-time alone (no windows) already recovers to 0.03,
-confirming the spurious-equilibrium diagnosis; the windowed curriculum then removes the
-remaining long-horizon error.
+dynamics at **7.0e-03** over the stitched trajectory — a ~130× improvement, with each
+window trained from a **fresh initialization** (`transfer_learning=False`). Pseudo-time
+alone (no windows) already recovers to 0.03, confirming the spurious-equilibrium
+diagnosis; the windowed curriculum then removes the remaining long-horizon error.
 
 <figure class="example-figure">
   <video src="/jaxpi2/results/gray_scott_pred.mp4" autoplay loop muted playsinline></video>
@@ -39,7 +39,7 @@ remaining long-horizon error.
 ![Gray-Scott convergence](/jaxpi2/results/gray_scott_convergence.png)
 
 <figcaption>Training losses and per-variable errors across all four windows (the sawtooth
-marks each window's warm restart).</figcaption>
+marks each window's fresh restart).</figcaption>
 </figure>
 
 ## Run
@@ -47,7 +47,9 @@ marks each window's warm restart).</figcaption>
 ```bash
 cd examples/gray_scott
 python3 main.py --config=configs/pseudo_time.py \
-    --config.training.num_time_windows=4
+    --config.time_range="(0.0, 1.0)" \
+    --config.training.num_time_windows=4 \
+    --config.training.transfer_learning=False
 ```
 
 | Config | Description |
