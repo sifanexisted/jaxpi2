@@ -2,7 +2,9 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from jax import lax, jit, grad, vmap, pmap, jacrev, hessian
+from jax import lax, jit, vmap, pmap
+
+from jaxpi.derivatives import hessian_diag_fwd, value_and_jacfwd
 
 from jaxpi.models import ForwardIVP
 
@@ -24,9 +26,9 @@ class AllenCahn(ForwardIVP):
         return u[0]
 
     def r_net(self, params, t, x):
-        u = self.neural_net(params, t, x)
-        u_t = grad(self.neural_net, argnums=1)(params, t, x)
-        u_xx = grad(grad(self.neural_net, argnums=2), argnums=2)(params, t, x)
+        # value and u_t in one forward sweep; u_xx by forward-over-forward
+        u, (u_t,) = value_and_jacfwd(self.neural_net, (1,))(params, t, x)
+        (u_xx,) = hessian_diag_fwd(self.neural_net, (2,))(params, t, x)
         return u_t + 5 * u ** 3 - 5 * u - 0.0001 * u_xx
 
     @partial(jit, static_argnums=(0,))

@@ -133,6 +133,7 @@ export default defineConfig({
             { text: "jaxpi.models", link: "/api/models" },
             { text: "jaxpi.training", link: "/api/training" },
             { text: "jaxpi.archs", link: "/api/archs" },
+            { text: "jaxpi.derivatives", link: "/api/derivatives" },
             { text: "jaxpi.samplers", link: "/api/samplers" },
             { text: "jaxpi.evaluator", link: "/api/evaluator" },
             { text: "jaxpi.checkpointing", link: "/api/checkpointing" },

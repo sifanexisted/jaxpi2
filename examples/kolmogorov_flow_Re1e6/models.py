@@ -1,7 +1,9 @@
 from functools import partial
 
 import jax.numpy as jnp
-from jax import jit, grad, vmap, jacrev, hessian
+from jax import jit, grad, vmap
+
+from jaxpi.derivatives import hessian_diag_fwd, value_and_jacfwd
 
 from jaxpi.models import ForwardIVP
 
@@ -58,17 +60,16 @@ class NavierStokes2D(ForwardIVP):
         return w
 
     def r_net(self, params, t, x, y):
-        u, v, p = self.neural_net(params, t, x, y)
-        (u_t, u_x, u_y), (v_t, v_x, v_y), (_, p_x, p_y) = jacrev(self.neural_net, argnums=(1, 2, 3))(params, t, x, y)
+        # forward-mode: one JVP sweep per coordinate gives every first
+        # derivative; nested JVPs give the pure second derivatives only
+        (u, v, p), (d_t, d_x, d_y) = value_and_jacfwd(
+            self.neural_net, (1, 2, 3))(params, t, x, y)
+        u_t, v_t, _ = d_t
+        u_x, v_x, p_x = d_x
+        u_y, v_y, p_y = d_y
 
-        u_hessian = hessian(self.u_net, argnums=(2, 3))(params, t, x, y)
-        v_hessian = hessian(self.v_net, argnums=(2, 3))(params, t, x, y)
-
-        u_xx = u_hessian[0][0]
-        u_yy = u_hessian[1][1]
-
-        v_xx = v_hessian[0][0]
-        v_yy = v_hessian[1][1]
+        (u_xx, v_xx, _), (u_yy, v_yy, _) = hessian_diag_fwd(
+            self.neural_net, (2, 3))(params, t, x, y)
 
         body_force = self.body_force_fn(x, y)
 

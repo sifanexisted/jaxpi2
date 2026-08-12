@@ -2,7 +2,9 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from jax import lax, jit, grad, vmap, pmap, jacrev, hessian
+from jax import lax, jit, vmap, pmap
+
+from jaxpi.derivatives import hessian_diag_fwd, jacfwd_scalar_args
 
 from jaxpi.models import ForwardIVP
 
@@ -25,12 +27,12 @@ class Wave1D(ForwardIVP):
         return u[0]
 
     def u_t_net(self, params, t, x):
-        u_t = grad(self.neural_net, argnums=1)(params, t, x)
+        (u_t,) = jacfwd_scalar_args(self.neural_net, (1,))(params, t, x)
         return u_t
 
     def r_net(self, params, t, x):
-        u_tt = grad(grad(self.neural_net, argnums=1), argnums=1)(params, t, x)
-        u_xx = grad(grad(self.neural_net, argnums=2), argnums=2)(params, t, x)
+        # pure second derivatives by forward-over-forward (no nested tapes)
+        u_tt, u_xx = hessian_diag_fwd(self.neural_net, (1, 2))(params, t, x)
         return u_tt - self.c ** 2 * u_xx
 
     @partial(jit, static_argnums=(0,))

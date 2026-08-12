@@ -1,8 +1,10 @@
 from functools import partial
 
 import jax.numpy as jnp
-from jax import jit, vmap, jacrev, hessian
+from jax import jit, vmap
 
+from jaxpi.derivatives import (hessian_diag_fwd, jacfwd_scalar_args,
+                               value_and_jacfwd)
 from jaxpi.models import ForwardIVP
 
 
@@ -48,9 +50,11 @@ class NavierStokes3D(ForwardIVP):
         return self.solution_net(params, t, x, y, z)[3]
 
     def vorticity_net(self, params, t, x, y, z):
-        _, u_x, u_y, u_z = jacrev(self.u_net, argnums=(1, 2, 3, 4))(params, t, x, y, z)
-        _, v_x, v_y, v_z = jacrev(self.v_net, argnums=(1, 2, 3, 4))(params, t, x, y, z)
-        _, w_x, w_y, w_z = jacrev(self.w_net, argnums=(1, 2, 3, 4))(params, t, x, y, z)
+        # one forward sweep per spatial coordinate gives all components
+        ((u_x, v_x, w_x, _),
+         (u_y, v_y, w_y, _),
+         (u_z, v_z, w_z, _)) = jacfwd_scalar_args(
+            self.solution_net, (2, 3, 4))(params, t, x, y, z)
 
         vor_x = w_y - v_z
         vor_y = u_z - w_x
@@ -59,20 +63,21 @@ class NavierStokes3D(ForwardIVP):
         return vor_x, vor_y, vor_z
 
     def r_net(self, params, t, x, y, z):
-        u, v, w, p = self.neural_net(params, t, x, y, z)
+        # forward-mode: one JVP sweep per coordinate gives every first
+        # derivative; nested JVPs give the pure second derivatives only
+        (u, v, w, p), (d_t, d_x, d_y, d_z) = value_and_jacfwd(
+            self.neural_net, (1, 2, 3, 4))(params, t, x, y, z)
+        u_t, v_t, w_t, _ = d_t
+        u_x, v_x, w_x, p_x = d_x
+        u_y, v_y, w_y, p_y = d_y
+        u_z, v_z, w_z, p_z = d_z
 
-        ((u_t, u_x, u_y, u_z),
-         (v_t, v_x, v_y, v_z),
-         (w_t, w_x, w_y, w_z),
-         (_, p_x, p_y, p_z)) = jacrev(self.neural_net, argnums=(1, 2, 3, 4))(params, t, x, y, z)
+        d2x, d2y, d2z = hessian_diag_fwd(
+            self.neural_net, (2, 3, 4))(params, t, x, y, z)
 
-        u_hessian = hessian(lambda *args: self.neural_net(*args)[0], argnums=(2, 3, 4))(params, t, x, y, z)
-        v_hessian = hessian(lambda *args: self.neural_net(*args)[1], argnums=(2, 3, 4))(params, t, x, y, z)
-        w_hessian = hessian(lambda *args: self.neural_net(*args)[2], argnums=(2, 3, 4))(params, t, x, y, z)
-
-        u_laplace = u_hessian[0][0] + u_hessian[1][1] + u_hessian[2][2]
-        v_laplace = v_hessian[0][0] + v_hessian[1][1] + v_hessian[2][2]
-        w_laplace = w_hessian[0][0] + w_hessian[1][1] + w_hessian[2][2]
+        u_laplace = d2x[0] + d2y[0] + d2z[0]
+        v_laplace = d2x[1] + d2y[1] + d2z[1]
+        w_laplace = d2x[2] + d2y[2] + d2z[2]
 
         # PDE residual
         ru = u_t + u * u_x + v * u_y + w * u_z + p_x - self.nu * u_laplace
@@ -168,20 +173,18 @@ class MultiStage(NavierStokes3D):
 
     def r_prev(self, t, x, y, z):
         """Navier-Stokes residual of the frozen previous-stage solution."""
-        u, v, w, _ = self.prev_net(t, x, y, z)
+        (u, v, w, _), (d_t, d_x, d_y, d_z) = value_and_jacfwd(
+            self.prev_net, (0, 1, 2, 3))(t, x, y, z)
+        u_t, v_t, w_t, _ = d_t
+        u_x, v_x, w_x, p_x = d_x
+        u_y, v_y, w_y, p_y = d_y
+        u_z, v_z, w_z, p_z = d_z
 
-        ((u_t, u_x, u_y, u_z),
-         (v_t, v_x, v_y, v_z),
-         (w_t, w_x, w_y, w_z),
-         (_, p_x, p_y, p_z)) = jacrev(self.prev_net, argnums=(0, 1, 2, 3))(t, x, y, z)
+        d2x, d2y, d2z = hessian_diag_fwd(self.prev_net, (1, 2, 3))(t, x, y, z)
 
-        u_hessian = hessian(self.u_prev, argnums=(1, 2, 3))(t, x, y, z)
-        v_hessian = hessian(self.v_prev, argnums=(1, 2, 3))(t, x, y, z)
-        w_hessian = hessian(self.w_prev, argnums=(1, 2, 3))(t, x, y, z)
-
-        u_laplace = u_hessian[0][0] + u_hessian[1][1] + u_hessian[2][2]
-        v_laplace = v_hessian[0][0] + v_hessian[1][1] + v_hessian[2][2]
-        w_laplace = w_hessian[0][0] + w_hessian[1][1] + w_hessian[2][2]
+        u_laplace = d2x[0] + d2y[0] + d2z[0]
+        v_laplace = d2x[1] + d2y[1] + d2z[1]
+        w_laplace = d2x[2] + d2y[2] + d2z[2]
 
         ru = u_t + u * u_x + v * u_y + w * u_z + p_x - self.nu * u_laplace
         rv = v_t + u * v_x + v * v_y + w * v_z + p_y - self.nu * v_laplace
@@ -192,25 +195,27 @@ class MultiStage(NavierStokes3D):
 
     def f_net(self, params, t, x, y, z):
         """NS operator linearized around the frozen previous-stage solution."""
-        u_diff, v_diff, w_diff, _ = self.neural_net(params, t, x, y, z)
-        u_prev, v_prev, w_prev, _ = self.prev_net(t, x, y, z)
+        ((u_diff, v_diff, w_diff, _),
+         (dd_t, dd_x, dd_y, dd_z)) = value_and_jacfwd(
+            self.neural_net, (1, 2, 3, 4))(params, t, x, y, z)
+        u_t_diff, v_t_diff, w_t_diff, _ = dd_t
+        u_x_diff, v_x_diff, w_x_diff, p_x_diff = dd_x
+        u_y_diff, v_y_diff, w_y_diff, p_y_diff = dd_y
+        u_z_diff, v_z_diff, w_z_diff, p_z_diff = dd_z
 
-        ((u_t_diff, u_x_diff, u_y_diff, u_z_diff),
-         (v_t_diff, v_x_diff, v_y_diff, v_z_diff),
-         (w_t_diff, w_x_diff, w_y_diff, w_z_diff),
-         (_, p_x_diff, p_y_diff, p_z_diff)) = jacrev(self.neural_net, argnums=(1, 2, 3, 4))(params, t, x, y, z)
+        ((u_prev, v_prev, w_prev, _),
+         (dp_x, dp_y, dp_z)) = value_and_jacfwd(
+            self.prev_net, (1, 2, 3))(t, x, y, z)
+        u_x_prev, v_x_prev, w_x_prev, _ = dp_x
+        u_y_prev, v_y_prev, w_y_prev, _ = dp_y
+        u_z_prev, v_z_prev, w_z_prev, _ = dp_z
 
-        u_x_prev, u_y_prev, u_z_prev = jacrev(self.u_prev, argnums=(1, 2, 3))(t, x, y, z)
-        v_x_prev, v_y_prev, v_z_prev = jacrev(self.v_prev, argnums=(1, 2, 3))(t, x, y, z)
-        w_x_prev, w_y_prev, w_z_prev = jacrev(self.w_prev, argnums=(1, 2, 3))(t, x, y, z)
+        d2x, d2y, d2z = hessian_diag_fwd(
+            self.neural_net, (2, 3, 4))(params, t, x, y, z)
 
-        u_hessian = hessian(lambda *args: self.neural_net(*args)[0], argnums=(2, 3, 4))(params, t, x, y, z)
-        v_hessian = hessian(lambda *args: self.neural_net(*args)[1], argnums=(2, 3, 4))(params, t, x, y, z)
-        w_hessian = hessian(lambda *args: self.neural_net(*args)[2], argnums=(2, 3, 4))(params, t, x, y, z)
-
-        u_laplace_diff = u_hessian[0][0] + u_hessian[1][1] + u_hessian[2][2]
-        v_laplace_diff = v_hessian[0][0] + v_hessian[1][1] + v_hessian[2][2]
-        w_laplace_diff = w_hessian[0][0] + w_hessian[1][1] + w_hessian[2][2]
+        u_laplace_diff = d2x[0] + d2y[0] + d2z[0]
+        v_laplace_diff = d2x[1] + d2y[1] + d2z[1]
+        w_laplace_diff = d2x[2] + d2y[2] + d2z[2]
 
         # Linearized advection terms
         u_ux = u_prev * u_x_diff + u_x_prev * u_diff
@@ -318,20 +323,19 @@ class MultiStage(NavierStokes3D):
 
     def _r_solution(self, params, t, x, y, z):
         """NS residual of the composed solution `prev + eps * diff`."""
-        u, v, w, _ = self.solution_net(params, t, x, y, z)
+        (u, v, w, _), (d_t, d_x, d_y, d_z) = value_and_jacfwd(
+            self.solution_net, (1, 2, 3, 4))(params, t, x, y, z)
+        u_t, v_t, w_t, _ = d_t
+        u_x, v_x, w_x, p_x = d_x
+        u_y, v_y, w_y, p_y = d_y
+        u_z, v_z, w_z, p_z = d_z
 
-        ((u_t, u_x, u_y, u_z),
-         (v_t, v_x, v_y, v_z),
-         (w_t, w_x, w_y, w_z),
-         (_, p_x, p_y, p_z)) = jacrev(self.solution_net, argnums=(1, 2, 3, 4))(params, t, x, y, z)
+        d2x, d2y, d2z = hessian_diag_fwd(
+            self.solution_net, (2, 3, 4))(params, t, x, y, z)
 
-        u_hessian = hessian(self.u_net, argnums=(2, 3, 4))(params, t, x, y, z)
-        v_hessian = hessian(self.v_net, argnums=(2, 3, 4))(params, t, x, y, z)
-        w_hessian = hessian(self.w_net, argnums=(2, 3, 4))(params, t, x, y, z)
-
-        u_laplace = u_hessian[0][0] + u_hessian[1][1] + u_hessian[2][2]
-        v_laplace = v_hessian[0][0] + v_hessian[1][1] + v_hessian[2][2]
-        w_laplace = w_hessian[0][0] + w_hessian[1][1] + w_hessian[2][2]
+        u_laplace = d2x[0] + d2y[0] + d2z[0]
+        v_laplace = d2x[1] + d2y[1] + d2z[1]
+        w_laplace = d2x[2] + d2y[2] + d2z[2]
 
         ru = u_t + u * u_x + v * u_y + w * u_z + p_x - self.nu * u_laplace
         rv = v_t + u * v_x + v * v_y + w * v_z + p_y - self.nu * v_laplace

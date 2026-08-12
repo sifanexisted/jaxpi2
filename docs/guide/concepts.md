@@ -15,6 +15,7 @@ samplers ───────┴──► train / train_time_windows ──► 
 Your PDE lives in a small subclass that implements three methods:
 
 ```python
+from jaxpi.derivatives import hessian_diag_fwd, value_and_jacfwd
 from jaxpi.models import ForwardIVP
 
 class Burgers(ForwardIVP):
@@ -24,11 +25,9 @@ class Burgers(ForwardIVP):
         return self.state.apply_fn(params, z)[0]
 
     def r_net(self, params, t, x):
-        """Pointwise PDE residual (autodiff for derivatives)."""
-        u = self.neural_net(params, t, x)
-        u_t = grad(self.neural_net, argnums=1)(params, t, x)
-        u_x = grad(self.neural_net, argnums=2)(params, t, x)
-        u_xx = grad(grad(self.neural_net, argnums=2), argnums=2)(params, t, x)
+        """Pointwise PDE residual (forward-mode autodiff for derivatives)."""
+        u, (u_t, u_x) = value_and_jacfwd(self.neural_net, (1, 2))(params, t, x)
+        (u_xx,) = hessian_diag_fwd(self.neural_net, (2,))(params, t, x)
         return u_t + u * u_x - 0.01 / jnp.pi * u_xx
 
     def losses(self, params, state, batch):
@@ -41,6 +40,17 @@ class Burgers(ForwardIVP):
         )
         return {"ics": ics_loss, **res_losses}
 ```
+
+::: tip Residual derivatives are forward-mode
+[`jaxpi.derivatives`](/api/derivatives) computes them with JVPs: one forward sweep per
+coordinate yields every output's first derivative (`value_and_jacfwd`), and nested sweeps
+yield only the pure second derivatives a Laplacian needs (`hessian_diag_fwd`) — no tape,
+no transpose pass, no unused Hessian cross terms. On multi-output models this evaluates
+1.4–3x faster than the `jacrev` + `hessian` idiom, with identical values. Two deliberate
+exceptions: single-output, first-order-only residuals keep `grad` (reverse mode is optimal
+there, see `examples/advection`), and high-order 1D chains use Taylor-mode `jet`
+(see `examples/ks`).
+:::
 
 - Time-dependent problems subclass `ForwardIVP` (adds causal weighting); steady
   boundary-value problems subclass `ForwardBVP`.

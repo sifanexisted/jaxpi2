@@ -2,8 +2,9 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from jax import lax, jit, grad, vmap, pmap, jacrev, hessian
+from jax import lax, jit, grad, vmap, pmap
 
+from jaxpi.derivatives import hessian_diag_fwd, value_and_jacfwd
 from jaxpi.models import ForwardIVP
 
 
@@ -42,18 +43,13 @@ class GinzburgLandau(ForwardIVP):
         return v
 
     def r_net(self, params, t, x, y):
-        u, v = self.neural_net(params, t, x, y)
+        # forward-mode: a single JVP gives both time derivatives; nested
+        # JVPs give the pure second derivatives only
+        (u, v), ((u_t, v_t),) = value_and_jacfwd(
+            self.neural_net, (1,))(params, t, x, y)
 
-        u_t = grad(self.u_net, argnums=1)(params, t, x, y)
-        v_t = grad(self.v_net, argnums=1)(params, t, x, y)
-
-        u_hessian, v_hessian = hessian(self.neural_net, argnums=(2, 3))(params, t, x, y)
-
-        u_xx = u_hessian[0][0]
-        u_yy = u_hessian[1][1]
-
-        v_xx = v_hessian[0][0]
-        v_yy = v_hessian[1][1]
+        (u_xx, v_xx), (u_yy, v_yy) = hessian_diag_fwd(
+            self.neural_net, (2, 3))(params, t, x, y)
 
         u_laplace = u_xx + u_yy
         v_laplace = v_xx + v_yy
