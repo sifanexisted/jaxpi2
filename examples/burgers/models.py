@@ -2,7 +2,9 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from jax import lax, jit, grad, vmap, pmap, jacrev, hessian
+from jax import lax, jit, vmap, pmap
+
+from jaxpi.derivatives import hessian_diag_fwd, value_and_jacfwd
 
 from jaxpi.models import ForwardIVP
 
@@ -24,10 +26,10 @@ class Burgers(ForwardIVP):
         return u[0]
 
     def r_net(self, params, t, x):
-        u = self.neural_net(params, t, x)
-        u_t = grad(self.neural_net, argnums=1)(params, t, x)
-        u_x = grad(self.neural_net, argnums=2)(params, t, x)
-        u_xx = grad(grad(self.neural_net, argnums=2), argnums=2)(params, t, x)
+        # value and first derivatives in one forward sweep per coordinate;
+        # u_xx by forward-over-forward (no nested tapes)
+        u, (u_t, u_x) = value_and_jacfwd(self.neural_net, (1, 2))(params, t, x)
+        (u_xx,) = hessian_diag_fwd(self.neural_net, (2,))(params, t, x)
         return u_t + u * u_x - 0.01 / jnp.pi * u_xx
 
     @partial(jit, static_argnums=(0,))

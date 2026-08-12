@@ -2,7 +2,9 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from jax import lax, jit, grad, vmap, pmap, jacrev, hessian
+from jax import lax, jit, vmap, pmap
+
+from jaxpi.derivatives import value_and_jacfwd
 
 from jax.experimental.jet import jet
 
@@ -28,8 +30,9 @@ class KS(ForwardIVP):
         return u[0]
 
     def r_net(self, params, t, x):
-        u = self.neural_net(params, t, x)
-        u_t = grad(self.neural_net, argnums=1)(params, t, x)
+        # value and u_t in one forward sweep; the x-derivative chain stays
+        # Taylor-mode (jet): all orders in a single pass
+        u, (u_t,) = value_and_jacfwd(self.neural_net, (1,))(params, t, x)
         u_fn = lambda x: self.neural_net(params, t, x)
         _, (u_x, u_xx, u_xxx, u_xxxx) = jet(u_fn, (x,), [[1.0, 0.0, 0.0, 0.0]])
         return (

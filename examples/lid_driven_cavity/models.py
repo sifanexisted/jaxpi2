@@ -2,8 +2,9 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from jax import lax, jit, grad, vmap, pmap, jacrev, hessian
+from jax import lax, jit, grad, vmap, pmap
 
+from jaxpi.derivatives import hessian_diag_fwd, value_and_jacfwd
 from jaxpi.models import ForwardBVP
 
 from utils import sample_points_on_square_boundary
@@ -55,18 +56,15 @@ class NavierStokes2D(ForwardBVP):
         return p
 
     def r_net(self, params, x, y):
-        u, v, p = self.neural_net(params, x, y)
+        # forward-mode: one JVP sweep per coordinate gives every first
+        # derivative; nested JVPs give the pure second derivatives only
+        (u, v, p), (d_x, d_y) = value_and_jacfwd(
+            self.neural_net, (1, 2))(params, x, y)
+        u_x, v_x, p_x = d_x
+        u_y, v_y, p_y = d_y
 
-        (u_x, u_y), (v_x, v_y), (p_x, p_y) = jacrev(self.neural_net, argnums=(1, 2))(params, x, y)
-
-        u_hessian = hessian(self.u_net, argnums=(1, 2))(params, x, y)
-        v_hessian = hessian(self.v_net, argnums=(1, 2))(params, x, y)
-
-        u_xx = u_hessian[0][0]
-        u_yy = u_hessian[1][1]
-
-        v_xx = v_hessian[0][0]
-        v_yy = v_hessian[1][1]
+        (u_xx, v_xx, _), (u_yy, v_yy, _) = hessian_diag_fwd(
+            self.neural_net, (1, 2))(params, x, y)
 
         ru = u * u_x + v * u_y + p_x - self.nu * (u_xx + u_yy)
         rv = u * v_x + v * v_y + p_y - self.nu * (v_xx + v_yy)
@@ -75,14 +73,8 @@ class NavierStokes2D(ForwardBVP):
         return {"u": ru, "v": rv, "p": rc}
 
     def diffusion_net(self, params, x, y):
-        u_hessian = hessian(self.u_net, argnums=(1, 2))(params, x, y)
-        v_hessian = hessian(self.v_net, argnums=(1, 2))(params, x, y)
-
-        u_xx = u_hessian[0][0]
-        u_yy = u_hessian[1][1]
-
-        v_xx = v_hessian[0][0]
-        v_yy = v_hessian[1][1]
+        (u_xx, v_xx, _), (u_yy, v_yy, _) = hessian_diag_fwd(
+            self.neural_net, (1, 2))(params, x, y)
 
         return u_xx, u_yy, v_xx, v_yy
 

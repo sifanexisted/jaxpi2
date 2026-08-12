@@ -2,8 +2,9 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from jax import lax, jit, grad, vmap, pmap, jacrev, hessian
+from jax import lax, jit, grad, vmap, pmap
 
+from jaxpi.derivatives import hessian_diag_fwd, value_and_jacfwd
 from jaxpi.models import ForwardIVP
 
 
@@ -54,25 +55,17 @@ class RayleighTaylor2D(ForwardIVP):
         return temp
 
     def r_net(self, params, t, x, y):
-        u, v, p, temp = self.neural_net(params, t, x, y)
+        # forward-mode: one JVP sweep per coordinate gives every first
+        # derivative; nested JVPs give the pure second derivatives only
+        (u, v, p, temp), (d_t, d_x, d_y) = value_and_jacfwd(
+            self.neural_net, (1, 2, 3))(params, t, x, y)
+        u_t, v_t, _, temp_t = d_t
+        u_x, v_x, p_x, temp_x = d_x
+        u_y, v_y, p_y, temp_y = d_y
 
-        ((u_t, u_x, u_y),
-         (v_t, v_x, v_y),
-         (_, p_x, p_y),
-         (temp_t, temp_x, temp_y)) = jacrev(self.neural_net, argnums=(1, 2, 3))(params, t, x, y)
-
-        u_hessian = hessian(self.u_net, argnums=(2, 3))(params, t, x, y)
-        v_hessian = hessian(self.v_net, argnums=(2, 3))(params, t, x, y)
-        temp_hessian = hessian(self.temp_net, argnums=(2, 3))(params, t, x, y)
-
-        u_xx = u_hessian[0][0]
-        u_yy = u_hessian[1][1]
-
-        v_xx = v_hessian[0][0]
-        v_yy = v_hessian[1][1]
-
-        temp_xx = temp_hessian[0][0]
-        temp_yy = temp_hessian[1][1]
+        ((u_xx, v_xx, _, temp_xx),
+         (u_yy, v_yy, _, temp_yy)) = hessian_diag_fwd(
+            self.neural_net, (2, 3))(params, t, x, y)
 
         ru = u_t + u * u_x + v * u_y + p_x - self.alpha1 * (u_xx + u_yy)
         rv = v_t + u * v_x + v * v_y + p_y - self.alpha1 * (v_xx + v_yy) - self.alpha2 * temp
