@@ -49,7 +49,8 @@ no transpose pass, no unused Hessian cross terms. On multi-output models this ev
 1.4–3x faster than the `jacrev` + `hessian` idiom, with identical values. Two deliberate
 exceptions: single-output, first-order-only residuals keep `grad` (reverse mode is optimal
 there, see `examples/advection`), and high-order 1D chains use Taylor-mode `jet`
-(see `examples/ks`).
+(see `examples/ks`). The design rationale is worked through in
+[Methods → Forward-Mode Derivatives](/methods/forward-derivatives).
 :::
 
 - Time-dependent problems subclass `ForwardIVP` (adds causal weighting); steady
