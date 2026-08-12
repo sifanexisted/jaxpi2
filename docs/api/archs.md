@@ -13,7 +13,7 @@ embedded as (cos(period_i * x), sin(period_i * x)), so the actual spatial
 period is 2*pi / period_i. E.g. period=2*pi for a domain of length 1,
 period=1.0 for a domain of length 2*pi.
 
-### `PeriodEmbs.setup()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/.venv/lib/python3.12/site-packages/flax/linen/module.py#L42' target='_blank'>[source]</a>
+### `PeriodEmbs.setup()`
 
 ```python
 PeriodEmbs.setup(self)
@@ -51,7 +51,7 @@ This can happen in three cases:
      :meth:`compact`, immediately before another method is called or
      ``setup`` defined attribute is accessed.
 
-### `PeriodEmbs.__call__()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/.venv/lib/python3.12/site-packages/flax/linen/module.py#L55' target='_blank'>[source]</a>
+### `PeriodEmbs.__call__()`
 
 ```python
 PeriodEmbs.__call__(self, x)
@@ -63,9 +63,9 @@ Apply the period embeddings to the specified axes.
 
 *Bases: `Module`*
 
-FourierEmbs(embed_scale: float, embed_dim: int, parent: Union[flax.linen.module.Module, flax.core.scope.Scope, flax.linen.module._Sentinel, NoneType] = <flax.linen.module._Sentinel object at 0x7fa9d0b1edb0>, name: Optional[str] = None)
+FourierEmbs(embed_scale: float, embed_dim: int, parent: Union[flax.linen.module.Module, flax.core.scope.Scope, flax.linen.module._Sentinel, NoneType] = <flax.linen.module._Sentinel object at 0x7ff903a9edb0>, name: Optional[str] = None)
 
-### `FourierEmbs.__call__()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/.venv/lib/python3.12/site-packages/flax/linen/module.py#L76' target='_blank'>[source]</a>
+### `FourierEmbs.__call__()`
 
 ```python
 FourierEmbs.__call__(self, x)
@@ -77,9 +77,9 @@ Call self as a function.
 
 *Bases: `Module`*
 
-Mlp(arch_name: Optional[str] = 'Mlp', num_layers: int = 4, hidden_dim: int = 256, out_dim: int = 1, activation: str = 'tanh', periodicity: Optional[Dict] = None, fourier_emb: Optional[Dict] = None, nonlinearity: Union[int, list] = 0.0, parent: Union[flax.linen.module.Module, flax.core.scope.Scope, flax.linen.module._Sentinel, NoneType] = <flax.linen.module._Sentinel object at 0x7fa9d0b1edb0>, name: Optional[str] = None)
+Mlp(arch_name: Optional[str] = 'Mlp', num_layers: int = 4, hidden_dim: int = 256, out_dim: int = 1, activation: str = 'tanh', periodicity: Optional[Dict] = None, fourier_emb: Optional[Dict] = None, nonlinearity: Union[int, list] = 0.0, parent: Union[flax.linen.module.Module, flax.core.scope.Scope, flax.linen.module._Sentinel, NoneType] = <flax.linen.module._Sentinel object at 0x7ff903a9edb0>, name: Optional[str] = None)
 
-### `Mlp.setup()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/.venv/lib/python3.12/site-packages/flax/linen/module.py#L100' target='_blank'>[source]</a>
+### `Mlp.setup()`
 
 ```python
 Mlp.setup(self)
@@ -117,7 +117,7 @@ This can happen in three cases:
      :meth:`compact`, immediately before another method is called or
      ``setup`` defined attribute is accessed.
 
-### `Mlp.__call__()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/.venv/lib/python3.12/site-packages/flax/linen/module.py#L103' target='_blank'>[source]</a>
+### `Mlp.__call__()`
 
 ```python
 Mlp.__call__(self, x)
@@ -129,9 +129,9 @@ Call self as a function.
 
 *Bases: `Module`*
 
-ModifiedMlp(arch_name: Optional[str] = 'ModifiedMlp', num_layers: int = 4, hidden_dim: int = 256, out_dim: int = 1, activation: str = 'tanh', periodicity: Optional[Dict] = None, fourier_emb: Optional[Dict] = None, nonlinearity: Union[int, list] = 0.0, parent: Union[flax.linen.module.Module, flax.core.scope.Scope, flax.linen.module._Sentinel, NoneType] = <flax.linen.module._Sentinel object at 0x7fa9d0b1edb0>, name: Optional[str] = None)
+ModifiedMlp(arch_name: Optional[str] = 'ModifiedMlp', num_layers: int = 4, hidden_dim: int = 256, out_dim: int = 1, activation: str = 'tanh', periodicity: Optional[Dict] = None, fourier_emb: Optional[Dict] = None, nonlinearity: Union[int, list] = 0.0, parent: Union[flax.linen.module.Module, flax.core.scope.Scope, flax.linen.module._Sentinel, NoneType] = <flax.linen.module._Sentinel object at 0x7ff903a9edb0>, name: Optional[str] = None)
 
-### `ModifiedMlp.setup()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/.venv/lib/python3.12/site-packages/flax/linen/module.py#L130' target='_blank'>[source]</a>
+### `ModifiedMlp.setup()`
 
 ```python
 ModifiedMlp.setup(self)
@@ -169,7 +169,7 @@ This can happen in three cases:
      :meth:`compact`, immediately before another method is called or
      ``setup`` defined attribute is accessed.
 
-### `ModifiedMlp.__call__()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/.venv/lib/python3.12/site-packages/flax/linen/module.py#L133' target='_blank'>[source]</a>
+### `ModifiedMlp.__call__()`
 
 ```python
 ModifiedMlp.__call__(self, x)
@@ -181,9 +181,9 @@ Call self as a function.
 
 *Bases: `Module`*
 
-PirateBlock(hidden_dim: int, activation: str, nonlinearity: float, parent: Union[flax.linen.module.Module, flax.core.scope.Scope, flax.linen.module._Sentinel, NoneType] = <flax.linen.module._Sentinel object at 0x7fa9d0b1edb0>, name: Optional[str] = None)
+PirateBlock(hidden_dim: int, activation: str, nonlinearity: float, parent: Union[flax.linen.module.Module, flax.core.scope.Scope, flax.linen.module._Sentinel, NoneType] = <flax.linen.module._Sentinel object at 0x7ff903a9edb0>, name: Optional[str] = None)
 
-### `PirateBlock.setup()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/.venv/lib/python3.12/site-packages/flax/linen/module.py#L162' target='_blank'>[source]</a>
+### `PirateBlock.setup()`
 
 ```python
 PirateBlock.setup(self)
@@ -221,7 +221,7 @@ This can happen in three cases:
      :meth:`compact`, immediately before another method is called or
      ``setup`` defined attribute is accessed.
 
-### `PirateBlock.__call__()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/.venv/lib/python3.12/site-packages/flax/linen/module.py#L165' target='_blank'>[source]</a>
+### `PirateBlock.__call__()`
 
 ```python
 PirateBlock.__call__(self, x, u, v)
@@ -233,9 +233,9 @@ Call self as a function.
 
 *Bases: `Module`*
 
-PirateNet(arch_name: Optional[str] = 'PirateNet', num_layers: int = 2, hidden_dim: int = 256, out_dim: int = 1, activation: str = 'tanh', nonlinearity: Union[int, list] = 0.0, periodicity: Optional[Dict] = None, fourier_emb: Optional[Dict] = None, parent: Union[flax.linen.module.Module, flax.core.scope.Scope, flax.linen.module._Sentinel, NoneType] = <flax.linen.module._Sentinel object at 0x7fa9d0b1edb0>, name: Optional[str] = None)
+PirateNet(arch_name: Optional[str] = 'PirateNet', num_layers: int = 2, hidden_dim: int = 256, out_dim: int = 1, activation: str = 'tanh', nonlinearity: Union[int, list] = 0.0, periodicity: Optional[Dict] = None, fourier_emb: Optional[Dict] = None, parent: Union[flax.linen.module.Module, flax.core.scope.Scope, flax.linen.module._Sentinel, NoneType] = <flax.linen.module._Sentinel object at 0x7ff903a9edb0>, name: Optional[str] = None)
 
-### `PirateNet.setup()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/.venv/lib/python3.12/site-packages/flax/linen/module.py#L198' target='_blank'>[source]</a>
+### `PirateNet.setup()`
 
 ```python
 PirateNet.setup(self)
@@ -273,7 +273,7 @@ This can happen in three cases:
      :meth:`compact`, immediately before another method is called or
      ``setup`` defined attribute is accessed.
 
-### `PirateNet.__call__()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/.venv/lib/python3.12/site-packages/flax/linen/module.py#L207' target='_blank'>[source]</a>
+### `PirateNet.__call__()`
 
 ```python
 PirateNet.__call__(self, x)

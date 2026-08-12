@@ -2,7 +2,7 @@
 
 Orbax checkpointing and resume helpers.
 
-## `get_ckpt_path()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L10' target='_blank'>[source]</a>
+## `get_ckpt_path()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L26' target='_blank'>[source]</a>
 
 ```python
 get_ckpt_path(config)
@@ -10,7 +10,7 @@ get_ckpt_path(config)
 
 Checkpoint root for a run: <saving.ckpt_path or cwd>/<wandb.name>/ckpt.
 
-## `has_checkpoint_steps()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L17' target='_blank'>[source]</a>
+## `has_checkpoint_steps()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L33' target='_blank'>[source]</a>
 
 ```python
 has_checkpoint_steps(path)
@@ -18,7 +18,7 @@ has_checkpoint_steps(path)
 
 Whether an Orbax checkpoint directory contains at least one saved step.
 
-## `latest_time_window()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L24' target='_blank'>[source]</a>
+## `latest_time_window()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L40' target='_blank'>[source]</a>
 
 ```python
 latest_time_window(ckpt_path, pattern='time_window_(\\d+)')
@@ -26,25 +26,25 @@ latest_time_window(ckpt_path, pattern='time_window_(\\d+)')
 
 Index of the last trained time window, based on checkpoint directories.
 
-## `create_checkpoint_manager()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L36' target='_blank'>[source]</a>
+## `create_checkpoint_manager()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L52' target='_blank'>[source]</a>
 
 ```python
 create_checkpoint_manager(config, ckpt_path, suffix=None)
 ```
 
-## `save_checkpoint()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L49' target='_blank'>[source]</a>
+## `save_checkpoint()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L65' target='_blank'>[source]</a>
 
 ```python
 save_checkpoint(ckpt_mngr, state)
 ```
 
-## `restore_checkpoint()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L57' target='_blank'>[source]</a>
+## `restore_checkpoint()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L73' target='_blank'>[source]</a>
 
 ```python
 restore_checkpoint(ckpt_mngr, state, step=None)
 ```
 
-## `CustomJSONEncoder` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L79' target='_blank'>[source]</a>
+## `CustomJSONEncoder` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L95' target='_blank'>[source]</a>
 
 *Bases: `JSONEncoder`*
 
@@ -75,7 +75,7 @@ To extend this to recognize other objects, subclass and implement a
 object for ``o`` if possible, otherwise it should call the superclass
 implementation (to raise ``TypeError``).
 
-### `CustomJSONEncoder.default()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L80' target='_blank'>[source]</a>
+### `CustomJSONEncoder.default()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L96' target='_blank'>[source]</a>
 
 ```python
 CustomJSONEncoder.default(self, obj)
@@ -98,7 +98,7 @@ implement default like this::
         # Let the base class default method raise the TypeError
         return super().default(o)
 
-## `save_config()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L88' target='_blank'>[source]</a>
+## `save_config()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/checkpointing.py#L104' target='_blank'>[source]</a>
 
 ```python
 save_config(config, workdir, name=None)

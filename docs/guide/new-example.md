@@ -29,8 +29,9 @@ examples/heat/
 from functools import partial
 
 import jax.numpy as jnp
-from jax import grad, jit, vmap
+from jax import jit, vmap
 
+from jaxpi.derivatives import hessian_diag_fwd, jacfwd_scalar_args
 from jaxpi.models import ForwardIVP
 
 
@@ -48,8 +49,10 @@ class Heat1D(ForwardIVP):
         return self.state.apply_fn(params, z)[0]
 
     def r_net(self, params, t, x):
-        u_t = grad(self.neural_net, argnums=1)(params, t, x)
-        u_xx = grad(grad(self.neural_net, argnums=2), argnums=2)(params, t, x)
+        # forward-mode helpers: tape-free JVP sweeps, and only the second
+        # derivatives the residual needs (see the jaxpi.derivatives API page)
+        (u_t,) = jacfwd_scalar_args(self.neural_net, (1,))(params, t, x)
+        (u_xx,) = hessian_diag_fwd(self.neural_net, (2,))(params, t, x)
         return u_t - self.kappa * u_xx   # single component: plain return is fine
 
     @partial(jit, static_argnums=(0,))

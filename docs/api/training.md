@@ -7,7 +7,7 @@ problems (that distinction lives in ForwardBVP / ForwardIVP), so there is a
 single `train_loop`. Time-dependent problems trained forward in time over
 consecutive windows use the `train_time_windows` orchestrator on top of it.
 
-## `sample_batches()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/training.py#L29' target='_blank'>[source]</a>
+## `sample_batches()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/training.py#L30' target='_blank'>[source]</a>
 
 ```python
 sample_batches(samplers)
@@ -19,7 +19,7 @@ For a dict, each yielded batch is a dict with one entry drawn from every
 sampler (e.g. {"ics": ..., "res": ...}). Any iterable works as a sampler,
 so fixed batches can be supplied with itertools.repeat(batch).
 
-## `train_loop()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/training.py#L50' target='_blank'>[source]</a>
+## `train_loop()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/training.py#L86' target='_blank'>[source]</a>
 
 ```python
 train_loop(
@@ -32,6 +32,7 @@ train_loop(
     eval_args=(),
     step_offset=0,
     stop_fn=None,
+    static_log=None,
 )
 ```
 
@@ -52,10 +53,12 @@ Args:
     consecutive windows/stages produce one continuous curve.
   stop_fn: optional `(step, log_dict) -> bool` early-stopping predicate,
     evaluated whenever metrics are logged.
+  static_log: optional dict merged into every logged metrics dict (e.g.
+    {"time_window": 2}), so run phases are identifiable in W&B charts.
 
 Returns the model (its `state` is updated in place).
 
-## `train()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/training.py#L148' target='_blank'>[source]</a>
+## `train()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/training.py#L194' target='_blank'>[source]</a>
 
 ```python
 train(config, model, batches, evaluator=None, eval_args=(), stop_fn=None)
@@ -63,7 +66,7 @@ train(config, model, batches, evaluator=None, eval_args=(), stop_fn=None)
 
 Single-run training: `train_loop` with the standard checkpoint layout.
 
-## `train_time_windows()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/training.py#L162' target='_blank'>[source]</a>
+## `train_time_windows()` <a class='source-link' href='https://github.com/sifanexisted/jaxpi2/blob/main/jaxpi/training.py#L210' target='_blank'>[source]</a>
 
 ```python
 train_time_windows(
@@ -92,8 +95,11 @@ Args:
   make_eval_args: optional `window_idx -> tuple` of extra positional
     arguments for the evaluator (e.g. the window's reference solution).
 
-Each window `idx` checkpoints under `time_window_{idx + 1}`. When
-`config.training.resume` is set, training continues from the last window
-with a checkpoint. When `config.training.transfer_learning` is set, each
-window starts from the previous window's parameters (with a fresh
-optimizer state); otherwise from a fresh initialization.
+Each window `idx` checkpoints under `time_window_{idx + 1}`.
+`config.training.num_time_windows` is the *total* number of windows. When
+`config.training.resume` is set, training continues where the checkpoints
+end: a partially trained window is re-entered and resumes from its last
+step, a finished window's successor starts fresh. When
+`config.training.transfer_learning` is set, each window starts from the
+previous window's parameters (with a fresh optimizer state); otherwise
+from a fresh initialization.
